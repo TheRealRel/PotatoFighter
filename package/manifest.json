@@ -1,0 +1,10 @@
+{
+    "name": "PotatoFighter",
+    "version_number": "1.0.0",
+    "website_url": "https://github.com/TheRealRel/PotatoFighter",
+    "description": "Combat pieces and weapons for Valheim. First up: call your thrown spears, javelins and throwing axes back to your hand.",
+    "dependencies": [
+        "denikson-BepInExPack_Valheim-5.4.2351",
+        "ValheimModding-Jotunn-2.30.2"
+    ]
+}
