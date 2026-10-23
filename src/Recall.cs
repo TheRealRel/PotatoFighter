@@ -20,6 +20,7 @@ namespace PotatoFighter
         private sealed class Thrown
         {
             public string Name;
+            public string Prefab;
             public Vector2i Slot;
             public Projectile Flying;             // still in the air
             public ItemDrop.ItemData FlyingItem;  // the item the projectile will drop
@@ -172,7 +173,7 @@ namespace PotatoFighter
                 else if (!Plugin.RecallPin.Value && t.Pin != null) { Minimap.instance.RemovePin(t.Pin); t.Pin = null; }
                 if (t.Pin != null) t.Pin.m_pos = t.Where;
             }
-            if (!go || !Plugin.RecallBeam.Value)
+            if (!go || !Plugin.BeamFor(t.Prefab))
             {
                 if (t.Beam) Destroy(t.Beam);
                 return;
@@ -230,6 +231,7 @@ namespace PotatoFighter
                 t.Slot.x.ToString(CultureInfo.InvariantCulture), t.Slot.y.ToString(CultureInfo.InvariantCulture),
                 t.Where.x.ToString("0.##", CultureInfo.InvariantCulture), t.Where.y.ToString("0.##", CultureInfo.InvariantCulture),
                 t.Where.z.ToString("0.##", CultureInfo.InvariantCulture), t.Name.Replace(":", "").Replace("|", ""),
+                (t.Prefab ?? "").Replace(":", "").Replace("|", ""),
             }));
             string text = string.Join("|", parts);
             if (text.Length == 0) player.m_customData.Remove(SaveKey);
@@ -250,7 +252,7 @@ namespace PotatoFighter
                     !int.TryParse(f[2], NumberStyles.Integer, inv, out int x) || !int.TryParse(f[3], NumberStyles.Integer, inv, out int y) ||
                     !float.TryParse(f[4], NumberStyles.Float, inv, out float px) || !float.TryParse(f[5], NumberStyles.Float, inv, out float py) ||
                     !float.TryParse(f[6], NumberStyles.Float, inv, out float pz)) continue;
-                thrown.Add(new Thrown { Drop = new ZDOID(user, id), Slot = new Vector2i(x, y), Where = new Vector3(px, py, pz), Name = f[7] });
+                thrown.Add(new Thrown { Drop = new ZDOID(user, id), Slot = new Vector2i(x, y), Where = new Vector3(px, py, pz), Name = f[7], Prefab = f.Length > 8 ? f[8] : null });
             }
         }
 
@@ -261,7 +263,7 @@ namespace PotatoFighter
             private static void Postfix(Projectile __instance, Character owner, ItemDrop.ItemData item)
             {
                 if (!Plugin.RecallEnabled.Value || item?.m_shared == null || !__instance.m_respawnItemOnHit || owner == null || owner != Player.m_localPlayer) return;
-                thrown.Add(new Thrown { Name = item.m_shared.m_name, Slot = item.m_gridPos, Flying = __instance, FlyingItem = item, Where = owner.transform.position });
+                thrown.Add(new Thrown { Name = item.m_shared.m_name, Prefab = item.m_dropPrefab ? item.m_dropPrefab.name : null, Slot = item.m_gridPos, Flying = __instance, FlyingItem = item, Where = owner.transform.position });
             }
         }
 
@@ -287,6 +289,24 @@ namespace PotatoFighter
                 t.Flying = null;
                 t.FlyingItem = null;
                 if (Player.m_localPlayer) Save(Player.m_localPlayer);
+            }
+        }
+
+        // The throw button with empty hands calls thrown weapons back instead of attacking. Holding a weapon that has its
+        // own throw or other secondary attack (a second spear) keeps that attack.
+        [HarmonyPatch(typeof(Player), nameof(Player.SetControls))]
+        private static class ThrowButton
+        {
+            private static void Prefix(Player __instance, ref bool secondaryAttack, ref bool secondaryAttackHold)
+            {
+                if (!secondaryAttack || __instance != Player.m_localPlayer || !Plugin.RecallEnabled.Value || !Plugin.RecallWithThrow.Value) return;
+                if (!thrown.Any(t => !t.Called) || __instance.IsDead()) return;
+                var weapon = __instance.GetCurrentWeapon();
+                bool emptyHands = weapon == null || weapon == __instance.m_unarmedWeapon?.m_itemData;
+                if (!emptyHands && weapon.HaveSecondaryAttack()) return;
+                CallAll(__instance);
+                secondaryAttack = false;
+                secondaryAttackHold = false;
             }
         }
 
