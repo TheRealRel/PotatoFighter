@@ -33,6 +33,11 @@ namespace PotatoFighter
         }
 
         private static readonly List<Thrown> thrown = new List<Thrown>();
+        // After a weapon comes back, the throw button does nothing until it's let go and a moment has passed, so the
+        // press (or hold) that called it back doesn't throw it again straight away.
+        private const float ThrowPause = 0.4f;
+        private static bool waitForRelease;
+        private static float pauseUntil;
         private static Projectile landing;   // the projectile whose item is being dropped right now
         private static Player loadedFor;
         private static Material beamMaterial;
@@ -153,6 +158,8 @@ namespace PotatoFighter
             if (held != null && held.IsWeapon() && player.GetCurrentWeapon() == player.m_unarmedWeapon?.m_itemData)
                 player.EquipItem(held);
             player.m_pickupEffects.Create(player.transform.position, Quaternion.identity);
+            waitForRelease = true;
+            pauseUntil = Time.time + ThrowPause;
             return true;
         }
 
@@ -173,7 +180,7 @@ namespace PotatoFighter
                 else if (!Plugin.RecallPin.Value && t.Pin != null) { Minimap.instance.RemovePin(t.Pin); t.Pin = null; }
                 if (t.Pin != null) t.Pin.m_pos = t.Where;
             }
-            if (!go || !Plugin.BeamFor(t.Prefab))
+            if (!go || !Plugin.Beam.Value)
             {
                 if (t.Beam) Destroy(t.Beam);
                 return;
@@ -201,8 +208,9 @@ namespace PotatoFighter
             line.SetPosition(1, parent.position + Vector3.up * 14f);
             line.startWidth = 0.07f;
             line.endWidth = 0.02f;
-            line.startColor = new Color(1f, 0.85f, 0.45f, 0.85f);
-            line.endColor = new Color(1f, 0.85f, 0.45f, 0f);
+            var color = Plugin.BeamColor.Value;
+            line.startColor = color;
+            line.endColor = new Color(color.r, color.g, color.b, 0f);
             line.sharedMaterial = beamMaterial;
             line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             line.receiveShadows = false;
@@ -216,6 +224,9 @@ namespace PotatoFighter
             private void Awake() => line = GetComponent<LineRenderer>();
             private void LateUpdate()
             {
+                var c = Plugin.BeamColor.Value;
+                line.startColor = c;
+                line.endColor = new Color(c.r, c.g, c.b, 0f);
                 var p = transform.parent ? transform.parent.position : transform.position;
                 line.SetPosition(0, p);
                 line.SetPosition(1, p + Vector3.up * 14f);
@@ -299,12 +310,23 @@ namespace PotatoFighter
         {
             private static void Prefix(Player __instance, ref bool secondaryAttack, ref bool secondaryAttackHold)
             {
+                if (__instance == Player.m_localPlayer && (waitForRelease || Time.time < pauseUntil))
+                {
+                    if (!secondaryAttack && !secondaryAttackHold) waitForRelease = false;
+                    if (waitForRelease || Time.time < pauseUntil)
+                    {
+                        secondaryAttack = false;
+                        secondaryAttackHold = false;
+                        return;
+                    }
+                }
                 if (!secondaryAttack || __instance != Player.m_localPlayer || !Plugin.RecallEnabled.Value || !Plugin.RecallWithThrow.Value) return;
                 if (!thrown.Any(t => !t.Called) || __instance.IsDead()) return;
                 var weapon = __instance.GetCurrentWeapon();
                 bool emptyHands = weapon == null || weapon == __instance.m_unarmedWeapon?.m_itemData;
                 if (!emptyHands && weapon.HaveSecondaryAttack()) return;
                 CallAll(__instance);
+                waitForRelease = true;
                 secondaryAttack = false;
                 secondaryAttackHold = false;
             }

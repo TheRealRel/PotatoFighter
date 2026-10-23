@@ -1,11 +1,8 @@
 // PotatoFighter - combat pieces and weapons for Valheim, written from scratch. First feature: weapon recall.
-using System.Collections.Generic;
-using System.Linq;
 using BepInEx;
 using BepInEx.Configuration;
 using BepInEx.Logging;
 using HarmonyLib;
-using Jotunn.Managers;
 using Jotunn.Utils;
 using UnityEngine;
 
@@ -23,9 +20,8 @@ namespace PotatoFighter
         private const string BeamSection = "2 - Light beam";
 
         internal static ManualLogSource Log;
-        internal static ConfigEntry<bool> RecallEnabled, RecallPin, RecallWithThrow;
-        private static readonly Dictionary<string, ConfigEntry<bool>> beams = new Dictionary<string, ConfigEntry<bool>>();
-        private static Plugin instance;
+        internal static ConfigEntry<bool> RecallEnabled, RecallPin, RecallWithThrow, Beam;
+        internal static ConfigEntry<Color> BeamColor;
         internal static ConfigEntry<KeyboardShortcut> RecallKey;
         internal static ConfigEntry<float> RecallStamina;
 
@@ -42,34 +38,11 @@ namespace PotatoFighter
             RecallKey = Config.Bind(RecallSection, "Recall key", KeyboardShortcut.Empty,
                 "An extra key that calls your thrown weapons back, whatever is in your hands. None by default.");
             RecallPin = Config.Bind(RecallSection, "Map pin", true, "Mark a thrown weapon on the map until it's back in your hands.");
-            instance = this;
-            ItemManager.OnItemsRegistered += AddBeamSettings;
+            Beam = Config.Bind(BeamSection, "Light beam", true, "Show a beam of light over a thrown weapon lying on the ground.");
+            BeamColor = Config.Bind(BeamSection, "Color", new Color(1f, 0.85f, 0.45f, 0.85f),
+                "The beam's colour. Its alpha is how strong the beam is at the bottom; it fades out towards the top.");
             new Harmony(Id).PatchAll(typeof(Plugin).Assembly);
             gameObject.AddComponent<Recall>();
         }
-
-        // One "Light beam" setting per weapon that can be thrown and lands as an item (the game's spears and modded
-        // throwing weapons), found once every mod's items are in.
-        private static void AddBeamSettings()
-        {
-            var db = ObjectDB.instance;
-            if (!db || instance == null) return;
-            foreach (var prefab in db.m_items.Where(x => x))
-            {
-                var shared = prefab.GetComponent<ItemDrop>()?.m_itemData?.m_shared;
-                if (shared == null || beams.ContainsKey(prefab.name) || !Throwable(shared)) continue;
-                string english = Localization.instance.Localize(shared.m_name);
-                beams[prefab.name] = instance.Config.Bind(BeamSection, SafeName(english == shared.m_name ? prefab.name : english), true,
-                    $"Show a beam of light over a thrown {english} ({prefab.name}) lying on the ground.");
-            }
-        }
-
-        private static bool Throwable(ItemDrop.ItemData.SharedData shared) =>
-            new[] { shared.m_attack, shared.m_secondaryAttack }.Any(a => a?.m_attackProjectile && a.m_attackProjectile.GetComponent<Projectile>() is Projectile p && p.m_respawnItemOnHit);
-
-        // Setting names can't hold = \ " ' [ ] or line breaks.
-        private static string SafeName(string name) => new string(name.Where(c => c >= ' ' && "=\\\"'[]".IndexOf(c) < 0).ToArray()).Trim();
-
-        internal static bool BeamFor(string prefab) => prefab == null || !beams.TryGetValue(prefab, out var entry) || entry.Value;
     }
 }
