@@ -26,11 +26,10 @@ namespace PotatoFighter
         internal const bool TestBuild = false;
         // Prefab names of PotatoFighter's own returning weapons; each weapon adds itself when it's made (KrakenAxe.Create).
         internal static readonly System.Collections.Generic.HashSet<string> OwnWeapons = new System.Collections.Generic.HashSet<string>();
-        private const string RecallSection = "1 - Weapon recall"; // No apostrophes: BepInEx rejects them in names.
-        private const string BeamSection = "2 - Light beam";
-        private const string CancelSection = "3 - Attack cancel";
-        private const string BowSection = "4 - Bows";
-        private const string ExplosionSection = "5 - Explosions";
+        // Two sections, so Configuration Manager stays short; settings sharing one start with what they belong to.
+        // No apostrophes or = \ " [ ] in names: BepInEx rejects them.
+        private const string WeaponSection = "1 - Weapons";
+        private const string CombatSection = "2 - Combat";
 
         internal static ManualLogSource Log;
         internal static ConfigEntry<bool> RecallEnabled, RecallPin, Beam, AttackCancelEnabled, KeepFastShots;
@@ -43,20 +42,20 @@ namespace PotatoFighter
         {
             Log = Logger;
             var serverSet = new ConfigurationManagerAttributes { IsAdminOnly = true };
-            RecallEnabled = Config.Bind(RecallSection, "Enabled", true,
+            RecallEnabled = Config.Bind(WeaponSection, "Weapon recall", true,
                 new ConfigDescription("After a throw, the throw button (middle mouse, or the gamepad's) calls a thrown weapon back to the hotbar slot it came from, while the hand it was thrown from is empty. Set by the server.", null, serverSet));
-            RecallStamina = Config.Bind(RecallSection, "Uses stamina", true,
+            RecallStamina = Config.Bind(WeaponSection, "Recall uses stamina", true,
                 new ConfigDescription("Calling a weapon back costs stamina: 15 at skill 0 in the weapon's own skill (Axes for an axe), less as the skill grows, nothing at 100. Off: free. Set by the server.", null, serverSet));
-            RecallPin = Config.Bind(RecallSection, "Map pin", true, "Mark a thrown weapon on the map until it's back in your hands.");
-            Beam = Config.Bind(BeamSection, "Light beam", true, "Show a beam of light over a thrown weapon lying on the ground.");
-            BeamColor = Config.Bind(BeamSection, "Color", new Color(1f, 0.85f, 0.45f, 0.85f),
+            RecallPin = Config.Bind(WeaponSection, "Recall map pin", true, "Mark a thrown weapon on the map until it's back in your hands.");
+            Beam = Config.Bind(WeaponSection, "Light beam", true, "Show a beam of light over a thrown weapon lying on the ground.");
+            BeamColor = Config.Bind(WeaponSection, "Light beam color", new Color(1f, 0.85f, 0.45f, 0.85f),
                 "The beam's colour. Its alpha is how strong the beam is at the bottom; it fades out towards the top.");
-            bool hadCancel = File.Exists(Config.ConfigFilePath) && File.ReadAllText(Config.ConfigFilePath).Contains("[" + CancelSection + "]");
-            AttackCancelEnabled = Config.Bind(CancelSection, "Enabled", true,
+            bool hadCancel = File.Exists(Config.ConfigFilePath) && File.ReadAllText(Config.ConfigFilePath).Contains("[" + CombatSection + "]");
+            AttackCancelEnabled = Config.Bind(CombatSection, "Attack cancel", true,
                 new ConfigDescription("Pressing block during an attack's windup or recovery abandons the attack and raises the guard at once, so you can parry mid-swing. A hit the swing hasn't reached never lands; stamina already paid and a hit already dealt stay. Cancelling never lets you attack faster. Set by the server.", null, serverSet));
-            KeepFastShots = Config.Bind(BowSection, "Keep fast shots", true,
+            KeepFastShots = Config.Bind(CombatSection, "Keep fast bow shots", true,
                 "With a fast draw (high Bows skill, Quick Draw), letting go of a fully drawn arrow before the last shot's animation ends no longer loses the shot: the arrow stays drawn and flies as soon as the bow can fire. Blocking, switching weapons or dying before then cancels it without using an arrow.");
-            ExplosionSize = Config.Bind(ExplosionSection, "Explosion size", 100,
+            ExplosionSize = Config.Bind(WeaponSection, "Explosion size", 100,
                 new ConfigDescription("The size of every PotatoFighter weapon's explosions, in percent of its own size (the Kraken Axe's ice explosion: 2.9 m at 100). Both the reach of the damage and the effect grow and shrink with it. Set by the server.", new AcceptableValueRange<int>(50, 200), serverSet));
             if (!hadCancel) CarryOverFromTweaks();
 
@@ -87,7 +86,7 @@ namespace PotatoFighter
             var tweaks = Read(Path.Combine(BepInEx.Paths.ConfigPath, "potato.tweaks.cfg"));
             bool changed = false;
             if (tweaks.TryGetValue("8 - Attack cancel|Enabled", out var cancel) && bool.TryParse(cancel, out bool on)) { AttackCancelEnabled.Value = on; changed = true; }
-            if (tweaks.TryGetValue("10 - Bug fixes|Game bug fixes", out var fixes) && bool.TryParse(fixes, out bool fix)) { KeepFastShots.Value = fix; changed = true; }
+            if ((tweaks.TryGetValue("10 - Bug fixes|Game bug fixes", out var fixes) || tweaks.TryGetValue("1 - General|Game bug fixes", out fixes)) && bool.TryParse(fixes, out bool fix)) { KeepFastShots.Value = fix; changed = true; }
             if (changed)
             {
                 Config.Save();

@@ -34,18 +34,20 @@ If you had Potato Tweaks before, PotatoFighter takes over your attack cancel and
 
 ## Settings
 
-Under PotatoFighter in Configuration Manager. The ones marked server are set by the server and sent to every player.
+Under PotatoFighter in Configuration Manager, in two sections. The ones marked server are set by the server and sent to every player.
 
 | Setting | Default | What it does |
 |---|---|---|
-| Weapon recall: Enabled (server) | On | Middle mouse calls a thrown Kraken Axe back while the hand it was thrown from is empty. |
-| Weapon recall: Uses stamina (server) | On | The call costs stamina: 15 at skill 0 in the weapon's own skill, less with skill, nothing at 100. Off: free. |
-| Weapon recall: Map pin | On | A thrown weapon has a pin on the map until it's back in your hands. |
+| **1 - Weapons** | | |
+| Weapon recall (server) | On | Middle mouse calls a thrown Kraken Axe back while the hand it was thrown from is empty. |
+| Recall uses stamina (server) | On | The call costs stamina: 15 at skill 0 in the weapon's own skill, less with skill, nothing at 100. Off: free. |
+| Recall map pin | On | A thrown weapon has a pin on the map until it's back in your hands. |
 | Light beam | On | A beam of light over a thrown weapon lying on the ground. |
-| Light beam: Color | Gold | The beam's colour. Its alpha is how strong the beam is at the bottom. |
-| Attack cancel: Enabled (server) | On | Block cancels an attack's windup or recovery. |
-| Bows: Keep fast shots | On | A fully drawn arrow let go too early waits and flies as soon as the bow can fire. |
-| Explosions: Explosion size (server) | 100 | The size of every PotatoFighter weapon's explosions, in percent of their own size (50-200). At 100 the Kraken Axe's ice burst reaches 2.9 m. |
+| Light beam color | Gold | The beam's colour. Its alpha is how strong the beam is at the bottom. |
+| Explosion size (server) | 100 | The size of every PotatoFighter weapon's explosions, in percent of their own size (50-200). At 100 the Kraken Axe's ice burst reaches 2.9 m. |
+| **2 - Combat** | | |
+| Attack cancel (server) | On | Block cancels an attack's windup or recovery. |
+| Keep fast bow shots | On | A fully drawn arrow let go too early waits and flies as soon as the bow can fire. |
 
 Bug reports go to [GitHub Issues](https://github.com/TheRealRel/PotatoFighter/issues), where the source lives too. Questions are welcome on Discord: [relanebeis](https://discord.com/users/373574370267889674).
 

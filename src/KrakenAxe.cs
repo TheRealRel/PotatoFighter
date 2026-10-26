@@ -396,11 +396,12 @@ namespace PotatoFighter
         }
     }
 
-    // The frost glow's strength follows Potato Tweaks' "7 - Visual effects" glow settings, live: "Upgrade glow" on uses
+    // The frost glow's strength follows Potato Tweaks' visual effects glow settings, live: "Upgrade glow" on uses
     // "Upgrade glow strength" (0 = off, 1 = as made, 2 = twice); off or without Tweaks it's as made.
     internal static class Glow
     {
-        private const string TweaksId = "potato.tweaks", Section = "7 - Visual effects";
+        private const string TweaksId = "potato.tweaks";
+        private static readonly string[] Sections = { "2 - Visual effects", "7 - Visual effects" };   // Tweaks 1.5.17 on, and before
         private static ConfigEntry<bool> enabled;
         private static ConfigEntry<float> strength;
         private static readonly HashSet<Lamp> lamps = new HashSet<Lamp>();
@@ -412,8 +413,8 @@ namespace PotatoFighter
             if (Chainloader.PluginInfos.TryGetValue(TweaksId, out var info) && info.Instance)
             {
                 var config = info.Instance.Config;
-                config.TryGetEntry(Section, "Upgrade glow", out enabled);
-                config.TryGetEntry(Section, "Upgrade glow strength", out strength);
+                foreach (var section in Sections)
+                    if (enabled == null && config.TryGetEntry(section, "Upgrade glow", out enabled)) config.TryGetEntry(section, "Upgrade glow strength", out strength);
                 if (enabled != null) enabled.SettingChanged += (_, __) => Apply();
                 if (strength != null) strength.SettingChanged += (_, __) => Apply();
             }
