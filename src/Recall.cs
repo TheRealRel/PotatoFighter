@@ -268,7 +268,11 @@ namespace PotatoFighter
             private Vector3 from;
             private float time, duration;
             private Transform pivot;
-            private bool delivered;
+            private bool delivered, reached;
+            // The catch: the game's own interact reach (the hand going out, as at a chest), started a moment before the
+            // axe arrives so the hand is out as it lands. Synced, like any animation trigger.
+            private const float ReachLead = 0.3f;
+            private static readonly AccessTools.FieldRef<Character, ZSyncAnimation> Anim = AccessTools.FieldRefAccess<Character, ZSyncAnimation>("m_zanim");
             private Vector3 last;
             private readonly HashSet<Character> struck = new HashSet<Character>();
             private const float ReturnDamage = 0.75f, HitRadius = 0.45f;
@@ -305,6 +309,11 @@ namespace PotatoFighter
                 transform.position = pos;
                 Strike(last, pos);
                 last = pos;
+                if (!reached && duration - time <= ReachLead)
+                {
+                    reached = true;
+                    if (!player.InAttack() && !player.InEmote() && !player.IsDead()) Anim(player)?.SetTrigger("interact");
+                }
                 if (pivot) pivot.Rotate(Spin * Time.deltaTime, 0f, 0f, Space.Self);
                 if (k >= 1f && !delivered)
                 {
