@@ -68,7 +68,6 @@ namespace PotatoFighter
                 ItemManager.Instance.AddItem(item);
                 Plugin.OwnWeapons.Add(PrefabName);
                 Glow.Watch();
-                ItemManager.OnItemsRegistered += RenderIcon;
             }
             catch (System.Exception e) { Plugin.Log.LogError($"The Kraken Axe couldn't be made: {e}"); }
         }
@@ -107,6 +106,7 @@ namespace PotatoFighter
             shared.m_maxDurability = 250f; shared.m_durabilityPerLevel = 50f;
             shared.m_blockPower = 48f; shared.m_attackForce = 60f; shared.m_toolTier = 4; shared.m_maxQuality = 4;
             shared.m_attack.m_attackStamina = 16f;
+            SetIcon(shared);
             axeSpecial = shared.m_secondaryAttack.Clone();
             axeSpecial.m_attackStamina = 32f;
             var spear = PrefabManager.Cache.GetPrefab<GameObject>("SpearBronze").GetComponent<ItemDrop>().m_itemData.m_shared.m_secondaryAttack;
@@ -200,18 +200,14 @@ namespace PotatoFighter
 
         internal static bool Is(ItemDrop.ItemData item) => item?.m_dropPrefab && item.m_dropPrefab.name == PrefabName;
 
-        // The inventory icon, rendered from the finished model once the game's items are in.
-        private static void RenderIcon()
+        // The inventory icon: rendered from our model beforehand (tools/icon.py) in the game's own layout, diagonal with
+        // the head top right. No icon on a dedicated server (no graphics); the iron axe's stays there.
+        private static void SetIcon(ItemDrop.ItemData.SharedData shared)
         {
-            ItemManager.OnItemsRegistered -= RenderIcon;
-            try
-            {
-                var prefab = PrefabManager.Instance.GetPrefab(PrefabName);
-                // Like the game's weapon icons: lying diagonally, haft from bottom left to head top right, flat side to us.
-                var sprite = RenderManager.Instance.Render(prefab, Quaternion.LookRotation(new Vector3(1f, 1f, 0f), Vector3.back));
-                if (sprite) prefab.GetComponent<ItemDrop>().m_itemData.m_shared.m_icons = new[] { sprite };
-            }
-            catch (System.Exception e) { Plugin.Log.LogWarning($"Kraken Axe icon: {e.Message}"); }
+            var texture = Assets.LoadTexture(Model + "_icon.png", false);
+            if (!texture) return;
+            texture.filterMode = FilterMode.Bilinear;
+            shared.m_icons = new[] { Sprite.Create(texture, new Rect(0, 0, texture.width, texture.height), new Vector2(0.5f, 0.5f)) };
         }
 
         // The throw's arm swing, played faster. ZSyncAnimation's speed is synced, so everyone sees the same throw; it goes
