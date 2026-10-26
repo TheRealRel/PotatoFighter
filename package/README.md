@@ -24,7 +24,7 @@ The frost in its grooves glows softly. With Potato Tweaks installed, the glow fo
 | Durability | 300 | +50 |
 | Block | 57 | |
 
-An Ashlands weapon, made at the Black Forge (level 3) from 16 flametal, 10 silver, 6 freeze glands and 4 serpent scales. Each upgrade costs 6 flametal, 4 silver and 3 freeze glands. It can be enchanted with Epic Loot, and an enchanted axe stays enchanted through every throw. Reforged Potential treats it as an Ashlands weapon, upgraded further with the Flametal Battle Idol.
+An Ashlands weapon, made at the Black Forge (level 3) from 16 flametal, 10 silver, 6 freeze glands and 4 serpent scales. Each upgrade costs 6 flametal, 4 silver and 3 freeze glands. It can be enchanted with Epic Loot, and an enchanted axe stays enchanted through every throw. Epic Loot's Throwable enchantment isn't offered for it, since the axe already throws. Reforged Potential treats it as an Ashlands weapon, upgraded further with the Flametal Battle Idol.
 
 **Calling it back.** The call costs a little stamina: 15 at Axes 0, less as the skill grows, nothing at 100. A Kraken Axe lying on the ground has a beam of light over it and a pin on your map until it's back in your hand, and it's remembered through a relog. It only answers when it's nearby, in the part of the world that's loaded around you.
 
