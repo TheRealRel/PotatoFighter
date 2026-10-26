@@ -1,4 +1,5 @@
-// PotatoFighter - fast swap: changing hand weapons without being slowed to a walk, on the run, and cut short by an attack.
+// PotatoFighter - fast swap: changing hand weapons without being slowed from a run to a walk; optionally also on the
+// sprint ("Fast swap while sprinting", off by default) and cut short by an attack ("Attack cuts a swap short", off).
 // Written from scratch; the idea comes from FastSwap by Skarif. Steps aside when FastSwap itself is installed.
 //
 // How the game does it: a weapon, shield, torch or tool has a short equip time (0.2 s for an axe), so selecting it puts an
@@ -112,7 +113,7 @@ namespace PotatoFighter
             private static void ClearForRun(Humanoid humanoid)
             {
                 var player = humanoid as Player;
-                if (player == null || !On(player))
+                if (player == null || !On(player) || !Plugin.FastSwapSprint.Value)
                 {
                     Clear(humanoid);
                     return;
@@ -138,7 +139,7 @@ namespace PotatoFighter
 
             private static void Postfix(Player __instance, ItemDrop.ItemData item)
             {
-                if (!On(__instance) || !HandItem(item) || !__instance.IsRunning()) return;
+                if (!On(__instance) || !Plugin.FastSwapSprint.Value || !HandItem(item) || !__instance.IsRunning()) return;
                 var queue = Queue(__instance);
                 if (queue == null || queue.Count == 0) return;
                 var added = queue[queue.Count - 1];
@@ -162,14 +163,14 @@ namespace PotatoFighter
                 var player = __instance as Player;
                 if (!On(player)) return;
                 sheathUntil = Time.time + SheathSeconds;
-                if (player.IsRunning()) PaySprint(player);
+                if (player.IsRunning() && Plugin.FastSwapSprint.Value) PaySprint(player);
             }
         }
 
         // An attack cuts a hand switch short: the switch finishes at once and the attack goes ahead with the new weapon.
         internal static void Interrupt(Player player)
         {
-            if (!On(player) || !Swapping(player)) return;
+            if (!On(player) || !Plugin.FastSwapAttack.Value || !Swapping(player)) return;
             var queue = Queue(player);
             if (queue != null && queue.Count > 0 && HandAction(queue[0]))
             {
@@ -208,7 +209,7 @@ namespace PotatoFighter
         {
             private static void Prefix(Player __instance)
             {
-                if (On(__instance) && Bows.AttackHold(__instance) && Swapping(__instance)) Interrupt(__instance);
+                if (On(__instance) && Plugin.FastSwapAttack.Value && Bows.AttackHold(__instance) && Swapping(__instance)) Interrupt(__instance);
             }
         }
 
