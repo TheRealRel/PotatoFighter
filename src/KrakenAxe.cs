@@ -20,7 +20,7 @@ namespace PotatoFighter
         internal const string ProjectileName = "potato_kraken_axe_projectile";
         private const string Model = "kraken_axe";
         private const float BalanceZ = 0.45f;     // the balance point along the haft (heavy head), metres from the hand
-        private const float SpinPerSecond = 1000f; // degrees a second, end over end (about 2.8 turns)
+        private const float SpinPerSecond = 720f;  // degrees a second, end over end: 2 turns, 12 deg a frame at 60 fps (no strobing at 30)
         private static readonly Color FrostColor = new Color(0.35f, 0.75f, 1f);
         private const float GlowStrength = 1.4f;
         private const float LightIntensity = 0.6f, LightRange = 3f;
