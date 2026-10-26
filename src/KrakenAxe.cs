@@ -20,7 +20,7 @@ namespace PotatoFighter
         internal const string ProjectileName = "potato_kraken_axe_projectile";
         internal const string IceBurstName = "potato_kraken_iceburst";
         private const string IceBurstEffect = "fx_DvergerMage_Ice_hit"; // a single, sharp ice impact with a flash of light
-        private const float IceBurstFrost = 60f, IceBurstFrostPerLevel = 8f, IceBurstReach = 1.8f;
+        private const float IceBurstFrost = 90f, IceBurstFrostPerLevel = 10f, IceBurstReach = 1.8f;
         private const float IceBurstRadius = 2.9f;  // at "Explosion size" 100
         private const float IceLookRadius = 2.5f;   // the reach the ice effect's own size matches; it's scaled from there
         private const string Model = "kraken_axe";
@@ -65,13 +65,12 @@ namespace PotatoFighter
                     Name = "$item_potato_kraken_axe",
                     Description = "$item_potato_kraken_axe_description",
                     CraftingStation = CraftingStations.BlackForge,
-                    MinStationLevel = 1,
+                    MinStationLevel = 3,                     // Ashlands, like the Berserkir Axes
                 };
-                config.AddRequirement(new RequirementConfig("BlackMetal", 10, 5));
-                config.AddRequirement(new RequirementConfig("YggdrasilWood", 6, 0));
-                config.AddRequirement(new RequirementConfig("Eitr", 4, 2));
-                config.AddRequirement(new RequirementConfig("FreezeGland", 4, 2));
-                config.AddRequirement(new RequirementConfig("SerpentScale", 2, 0));
+                config.AddRequirement(new RequirementConfig("FlametalNew", 16, 6));
+                config.AddRequirement(new RequirementConfig("Silver", 10, 4));
+                config.AddRequirement(new RequirementConfig("FreezeGland", 6, 3));
+                config.AddRequirement(new RequirementConfig("SerpentScale", 4, 0));
                 var item = new CustomItem(PrefabName, "AxeIron", config);
                 var projectile = MakeProjectile();
                 iceBurst = MakeIceBurst();
@@ -109,14 +108,14 @@ namespace PotatoFighter
             if (material && material.HasProperty("_EmissionColor")) material.SetColor("_EmissionColor", FrostColor * GlowStrength * factor);
         }
 
-        // The item: the iron axe's prefab with our model, Mistlands-tier numbers and two middle-mouse attacks.
+        // The item: the iron axe's prefab with our model, Ashlands-tier numbers and two middle-mouse attacks.
         private static void Setup(GameObject prefab, GameObject projectile)
         {
             var shared = prefab.GetComponent<ItemDrop>().m_itemData.m_shared;
-            shared.m_damages = new HitData.DamageTypes { m_slash = 70f, m_chop = 60f, m_frost = 30f, m_spirit = 20f };
-            shared.m_damagesPerLevel = new HitData.DamageTypes { m_slash = 5f, m_chop = 3f, m_frost = 3f, m_spirit = 2f };
-            shared.m_maxDurability = 250f; shared.m_durabilityPerLevel = 50f;
-            shared.m_blockPower = 48f; shared.m_attackForce = 60f; shared.m_toolTier = 4; shared.m_maxQuality = 4;
+            shared.m_damages = new HitData.DamageTypes { m_slash = 100f, m_chop = 80f, m_frost = 40f, m_spirit = 20f };
+            shared.m_damagesPerLevel = new HitData.DamageTypes { m_slash = 6f, m_chop = 4f, m_frost = 4f, m_spirit = 2f };
+            shared.m_maxDurability = 300f; shared.m_durabilityPerLevel = 50f;
+            shared.m_blockPower = 57f; shared.m_attackForce = 60f; shared.m_toolTier = 4; shared.m_maxQuality = 4;
             shared.m_attack.m_attackStamina = 16f;
             SetIcon(shared);
             axeSpecial = shared.m_secondaryAttack.Clone();
@@ -194,8 +193,8 @@ namespace PotatoFighter
         }
 
         // The game's own recipes list an upgrade idol that only its upgrade station asks for (forges and workbenches skip it),
-        // and Reforged Potential reads the same idol for the item's tier. A Mistlands weapon takes the tier 5 weapon idol,
-        // Upgrader5Weapon; the amounts and the upgrade cap come from the Jotun Bane (the Mistlands axe). Runs each time
+        // and Reforged Potential reads the same idol for the item's tier. An Ashlands weapon takes the tier 6 weapon idol
+        // (the Flametal battle idol), Upgrader6Weapon; the amounts and the upgrade cap come from the Berserkir Axes. Runs each time
         // the item database is built, after every mod's items are in.
         private static void AddUpgradeIdol()
         {
@@ -205,9 +204,9 @@ namespace PotatoFighter
                 if (!db) return;
                 var ours = db.m_recipes.Find(r => r && r.m_item && r.m_item.name == PrefabName);
                 if (!ours || System.Array.Exists(ours.m_resources, r => r.m_upgraderResource)) return;
-                var idol = db.GetItemPrefab("Upgrader5Weapon")?.GetComponent<ItemDrop>();
+                var idol = db.GetItemPrefab("Upgrader6Weapon")?.GetComponent<ItemDrop>();
                 if (!idol) { Plugin.Log.LogInfo("No upgrade idols in this game: the Kraken Axe upgrades at the forge only."); return; }
-                var reference = db.m_recipes.Find(r => r && r.m_item && r.m_item.name == "AxeJotunBane");
+                var reference = db.m_recipes.Find(r => r && r.m_item && r.m_item.name == "AxeBerzerkr");
                 var like = reference ? System.Array.Find(reference.m_resources, r => r.m_upgraderResource) : null;
                 var list = new List<Piece.Requirement>(ours.m_resources)
                 {
@@ -217,7 +216,7 @@ namespace PotatoFighter
                 var item = db.GetItemPrefab(PrefabName)?.GetComponent<ItemDrop>();
                 int cap = reference ? reference.m_item.m_itemData.m_shared.m_maxQuality : 0;
                 if (item && cap > item.m_itemData.m_shared.m_maxQuality) item.m_itemData.m_shared.m_maxQuality = cap;
-                Plugin.Log.LogInfo($"Kraken Axe: upgrade idol Upgrader5Weapon x{like?.m_amount ?? 1} (+{like?.m_amountPerLevel ?? 0} a level, {(like != null ? "as the Jotun Bane" : "no Jotun Bane recipe to copy")}), upgrade cap {item?.m_itemData.m_shared.m_maxQuality}.");
+                Plugin.Log.LogInfo($"Kraken Axe: upgrade idol Upgrader6Weapon x{like?.m_amount ?? 1} (+{like?.m_amountPerLevel ?? 0} a level, {(like != null ? "as the Berserkir Axes" : "no Berserkir Axes recipe to copy")}), upgrade cap {item?.m_itemData.m_shared.m_maxQuality}.");
             }
             catch (System.Exception e) { Plugin.Log.LogWarning($"The Kraken Axe's upgrade idol couldn't be added: {e.Message}"); }
         }
