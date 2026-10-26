@@ -33,6 +33,7 @@ namespace PotatoFighter
         internal const float ThrowSpeed = 32f;      // m/s leaving the hand (the spear: 20)
         private const float ThrowAnimSpeed = 1.49f; // the spear's throw animation played faster: a snappier arm, earlier release
         private const float ChopAnimSpeed = 1.3f;   // the axe's overhead chop (Shift + middle mouse), quicker
+        private const float ChopSkillSaving = 0.5f; // the chop's stamina falls by half at Axes 100 (the game's own: a third)
 
         private static Mesh mesh;
         private static Material material;
@@ -302,6 +303,24 @@ namespace PotatoFighter
                 if (Mathf.Approximately(speed, current)) return;
                 current = speed;
                 Anim(__instance)?.SetSpeed(speed);
+            }
+        }
+
+        // The chop gets cheaper with Axes skill than other attacks: half price at 100 instead of the game's two thirds. The
+        // game's own saving (a third, times the skill factor) is already in the result, so it's swapped for ours, and any
+        // other mod's changes to the cost are kept.
+        [HarmonyPatch(typeof(Attack), "GetAttackStamina")]
+        private static class ChopStamina
+        {
+            private static readonly AccessTools.FieldRef<Attack, Humanoid> Owner = AccessTools.FieldRefAccess<Attack, Humanoid>("m_character");
+
+            private static void Postfix(Attack __instance, ref float __result)
+            {
+                if (axeSpecial == null || __instance.m_attackAnimation != axeSpecial.m_attackAnimation || !Is(__instance.GetWeapon())) return;
+                var owner = Owner(__instance);
+                if (!owner) return;
+                float skill = owner.GetSkillFactor(Skills.SkillType.Axes);
+                __result *= (1f - ChopSkillSaving * skill) / (1f - 0.33f * skill);
             }
         }
 
