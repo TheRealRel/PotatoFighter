@@ -138,7 +138,27 @@ def rot(m, axis, deg, about=(0, 0, 0)):
 
 # ---------- renderer ----------
 
-def render(parts, yaw=35, pitch=25, fov=28, light=(-0.5, 0.8, 0.6)):
+def ambient_occlusion(depth, rad, strength=0.75):
+    # Screen-space ambient occlusion: a point is darkened by how many nearby points (in a ring around it on screen)
+    # sit in front of it, within a little depth. Crevices, overhangs and the edges where parts meet get the soft
+    # shadow the rendered Meshy icons have (the chest's bands, the anvil on its stump); open faces stay lit.
+    solid = np.isfinite(depth)
+    d = np.where(solid, depth, np.inf)
+    occ = np.zeros_like(depth); n = 0
+    for radius in (R * 0.02, R * 0.045, R * 0.08):
+        for a in np.linspace(0, 2 * np.pi, 12, endpoint=False):
+            dx, dy = int(round(np.cos(a) * radius)), int(round(np.sin(a) * radius))
+            sh = np.full_like(d, np.inf)
+            H, W = d.shape
+            sh[max(-dy, 0):H + min(-dy, 0), max(-dx, 0):W + min(-dx, 0)] = d[max(dy, 0):H + min(dy, 0), max(dx, 0):W + min(dx, 0)]
+            with np.errstate(invalid="ignore"):
+                diff = d - sh                               # > 0: the neighbour is in front
+                occ += np.where(np.isfinite(diff), np.clip(diff / (rad * 0.04), 0, 1) * (diff < rad * 0.5), 0)
+            n += 1
+    occ = np.where(solid, occ / n, 0)
+    return 1 - strength * np.clip(occ * 1.6, 0, 1)
+
+def render(parts, yaw=35, pitch=25, fov=28, light=(-0.5, 0.8, 0.6), shadows=True):
     tris, mats, mids, starts = [], [], [], []
     for i, (mesh, mat) in enumerate(parts):
         starts.append(sum(len(t) for t in tris))
@@ -187,6 +207,17 @@ def render(parts, yaw=35, pitch=25, fov=28, light=(-0.5, 0.8, 0.6)):
     nrm = np.cross(T[:, 1] - T[:, 0], T[:, 2] - T[:, 0]); nrm /= np.linalg.norm(nrm, axis=1)[:, None] + 1e-12
     # Normals face the camera.
     facing = (nrm * (T.mean(1) - eye)).sum(1) > 0; nrm[facing] *= -1
+    # Cast shadows: a ray from each visible point towards the light; anything in the way leaves it in shadow (only the
+    # ambient part of the light), so an arrow shades the bow behind it and a part shades what sits under it.
+    lit = np.ones((R, R))
+    if shadows:
+        import trimesh
+        whole = trimesh.Trimesh(vertices=T.reshape(-1, 3), faces=np.arange(len(T) * 3).reshape(-1, 3), process=False)
+        hit_mask = tid >= 0
+        tt_all = tid[hit_mask]; P_all = (T[tt_all] * bary[hit_mask][..., None]).sum(1)
+        origins = P_all + nrm[tt_all] * rad * 0.006 + L * rad * 0.004
+        blocked = trimesh.ray.ray_triangle.RayMeshIntersector(whole).intersects_any(origins, np.tile(L, (len(origins), 1)))
+        lit[hit_mask] = np.where(blocked, 0.0, 1.0)
     for i, mat in enumerate(mats):
         mask = (tid >= 0) & (M[np.maximum(tid, 0)] == i)
         if not mask.any(): continue
@@ -194,9 +225,11 @@ def render(parts, yaw=35, pitch=25, fov=28, light=(-0.5, 0.8, 0.6)):
         P = (T[tt] * b[..., None]).sum(1); n = nrm[tt]
         col = mat(P, n, tt - starts[i], b) if getattr(mat, "textured", False) else mat(P, n)
         if mat not in GLOW:
-            lam = np.clip(n @ L, 0, 1)
+            lam = np.clip(n @ L, 0, 1) * lit[mask]
             col = col * (0.42 + 0.78 * lam)[:, None]
         img[mask] = col
+
+    img *= ambient_occlusion(depth, rad)[..., None]
 
     # Down to 80 px: average 4x4 blocks, keep pixels that are mostly covered, then a dark outline.
     k = R // OUT_PX
