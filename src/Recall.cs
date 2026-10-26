@@ -175,6 +175,19 @@ namespace PotatoFighter
                     continue;
                 }
                 drop.Load();
+                if (t.Prefab == KrakenAxe.PrefabName)
+                {
+                    // A magical axe flies back to the hand: take the item now (nobody else can pick it up on the way)
+                    // and hand it over when the flight arrives.
+                    var item = drop.m_itemData;
+                    var from = go.transform.position;
+                    ZNetScene.instance.Destroy(go);
+                    var slot = new Thrown { Name = t.Name, Prefab = t.Prefab, Slot = t.Slot, Hand = t.Hand };
+                    Forget(i);
+                    changed = true;
+                    ReturnFlight.Begin(player, item, slot, from);
+                    continue;
+                }
                 if (GiveBack(player, drop.m_itemData, t))
                 {
                     ZNetScene.instance.Destroy(go);
@@ -205,6 +218,62 @@ namespace PotatoFighter
             waitForRelease = true;
             pauseUntil = Time.time + ThrowPause;
             return true;
+        }
+
+        // The thrown axe's way back: a spinning copy flies from where it lay to the right hand (about 25 m a second, at
+        // least a third of a second), then the item goes into its slot. Only drawn on this player's screen.
+        private sealed class ReturnFlight : MonoBehaviour
+        {
+            private const float Speed = 25f, MinTime = 0.35f, MaxTime = 1.2f, Spin = 1400f;
+            private Player player;
+            private ItemDrop.ItemData item;
+            private Thrown slot;
+            private Vector3 from;
+            private float time, duration;
+            private Transform pivot;
+            private bool delivered;
+
+            internal static void Begin(Player player, ItemDrop.ItemData item, Thrown slot, Vector3 from)
+            {
+                var go = new GameObject("PotatoFighter return");
+                go.transform.position = from;
+                var flight = go.AddComponent<ReturnFlight>();
+                flight.player = player; flight.item = item; flight.slot = slot; flight.from = from;
+                flight.duration = Mathf.Clamp(Vector3.Distance(from, Hand(player)) / Speed, MinTime, MaxTime);
+                flight.pivot = KrakenAxe.SpinningModel(go.transform, "spin").transform;
+            }
+
+            private static Vector3 Hand(Player p)
+            {
+                var vis = p ? p.GetComponent<VisEquipment>() : null;
+                return vis && vis.m_rightHand ? vis.m_rightHand.position : (p ? p.transform.position + Vector3.up * 1.2f : Vector3.zero);
+            }
+
+            private void Update()
+            {
+                if (!player) { Destroy(gameObject); return; }
+                time += Time.deltaTime;
+                float k = Mathf.Clamp01(time / duration);
+                float eased = k * k * (3f - 2f * k);
+                var to = Hand(player);
+                var pos = Vector3.Lerp(from, to, eased) + Vector3.up * Mathf.Sin(k * Mathf.PI) * 0.6f;
+                var dir = to - pos;
+                if (dir.sqrMagnitude > 1e-4f) transform.rotation = Quaternion.LookRotation(dir);
+                transform.position = pos;
+                if (pivot) pivot.Rotate(Spin * Time.deltaTime, 0f, 0f, Space.Self);
+                if (k >= 1f) { Deliver(); Destroy(gameObject); }
+            }
+
+            private void OnDestroy() => Deliver();
+
+            private void Deliver()
+            {
+                if (delivered) return;
+                delivered = true;
+                var p = player ? player : Player.m_localPlayer;
+                if (p && !GiveBack(p, item, slot))
+                    ItemDrop.DropItem(item, item.m_stack, p.transform.position + p.transform.forward + Vector3.up, Quaternion.identity);
+            }
         }
 
         private static void Forget(int index)

@@ -57,10 +57,12 @@ namespace PotatoFighter
 
             harmony = new Harmony(Id);
             var nested = typeof(Recall).GetNestedTypes(AccessTools.all).Concat(typeof(Flight).GetNestedTypes(AccessTools.all))
-                .Concat(typeof(AttackCancel).GetNestedTypes(AccessTools.all));
+                .Concat(typeof(AttackCancel).GetNestedTypes(AccessTools.all)).Concat(typeof(KrakenAxe).GetNestedTypes(AccessTools.all));
             foreach (var type in nested) Patch(type);
             foreach (var type in new[] { typeof(Probe), typeof(BowRelease), typeof(QueuedBowRelease), typeof(TripleShotCancel) }) Patch(type);
             gameObject.AddComponent<Recall>();
+            Assets.Dir = Path.Combine(Path.GetDirectoryName(Info.Location), "assets");
+            KrakenAxe.Register();
         }
 
         private Harmony harmony;
