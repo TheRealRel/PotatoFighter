@@ -246,7 +246,7 @@ namespace PotatoFighter
             private Vector3 from;
             private float time, duration;
             private Transform pivot;
-            private bool delivered;
+            private bool delivered, posed;
             private Vector3 last;
             private readonly HashSet<Character> struck = new HashSet<Character>();
             private const float ReturnDamage = 0.75f, HitRadius = 0.45f;
@@ -260,6 +260,8 @@ namespace PotatoFighter
                 flight.player = player; flight.item = item; flight.slot = slot; flight.from = from;
                 flight.duration = Mathf.Clamp(Vector3.Distance(from, Hand(player)) / Speed, MinTime, MaxTime);
                 flight.pivot = KrakenAxe.SpinningModel(go.transform, "spin").transform;
+                // Hand out to catch it: the game's point emote (synced; it won't start mid-attack and stops if you move).
+                if (!player.InEmote()) { player.StartEmote("point", true); flight.posed = player.InEmote(); }
                 flight.last = from;
                 if (characterMask == 0) characterMask = LayerMask.GetMask("character", "character_net", "character_ghost", "hitbox", "character_noenv");
             }
@@ -288,6 +290,9 @@ namespace PotatoFighter
             }
 
             private void OnDestroy() => Deliver();
+
+            private static readonly System.Reflection.MethodInfo stopEmote = AccessTools.Method(typeof(Player), "StopEmote");
+            private static void StopEmote(Player p) => stopEmote?.Invoke(p, null);
 
             // Enemies the axe passes through on its way back take a hit (once each, 75% of a swing's damage), like the
             // throw; tamed animals, other players and anything the game doesn't count as an enemy are left alone.
@@ -323,6 +328,7 @@ namespace PotatoFighter
                 if (delivered) return;
                 delivered = true;
                 var p = player ? player : Player.m_localPlayer;
+                if (posed && p && p.InEmote()) StopEmote(p);
                 if (p && !GiveBack(p, item, slot))
                     ItemDrop.DropItem(item, item.m_stack, p.transform.position + p.transform.forward + Vector3.up, Quaternion.identity);
             }

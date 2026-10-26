@@ -18,6 +18,8 @@ namespace PotatoFighter
     {
         internal const string PrefabName = "potato_kraken_axe";              // never rename: worlds save items by it
         internal const string ProjectileName = "potato_kraken_axe_projectile";
+        internal const string IceBurstName = "potato_kraken_iceburst";
+        private const float IceBurstRadius = 3.5f, IceBurstFrost = 40f, IceBurstFrostPerLevel = 6f, IceBurstReach = 1.8f;
         private const string Model = "kraken_axe";
         private const float BalanceZ = 0.45f;     // the balance point along the haft (heavy head), metres from the hand
         private const float SpinPerSecond = 792f;  // degrees a second, end over end: 2 turns, 12 deg a frame at 60 fps (no strobing at 30)
@@ -32,6 +34,7 @@ namespace PotatoFighter
         private static Mesh mesh;
         private static Material material;
         private static Attack throwAttack, axeSpecial;
+        private static GameObject iceBurst;
 
         internal static void Register()
         {
@@ -65,6 +68,7 @@ namespace PotatoFighter
                 config.AddRequirement(new RequirementConfig("SerpentScale", 2, 0));
                 var item = new CustomItem(PrefabName, "AxeIron", config);
                 var projectile = MakeProjectile();
+                iceBurst = MakeIceBurst();
                 Setup(item.ItemPrefab, projectile);
                 ItemManager.Instance.AddItem(item);
                 Plugin.OwnWeapons.Add(PrefabName);
@@ -182,6 +186,28 @@ namespace PotatoFighter
             return go;
         }
 
+        // The chop's ice explosion: the game's frost nova (an Aoe) with its own ice burst as the start effect. Frost damage
+        // only (its slow comes with the frost), enemies only, once, on the ground where the chop lands; stronger with the
+        // axe's level. Made by the attacking player's game and synced like a projectile.
+        private static GameObject MakeIceBurst()
+        {
+            var go = PrefabManager.Instance.CreateClonedPrefab(IceBurstName, "FenringIceNova_aoe");
+            var aoe = go.GetComponent<Aoe>();
+            aoe.m_useAttackSettings = false;
+            aoe.m_damage = new HitData.DamageTypes { m_frost = IceBurstFrost };
+            aoe.m_damagePerLevel = new HitData.DamageTypes { m_frost = IceBurstFrostPerLevel };
+            aoe.m_radius = IceBurstRadius;
+            aoe.m_hitEnemy = true; aoe.m_hitFriendly = false; aoe.m_hitOwner = false; aoe.m_hitSame = false;
+            aoe.m_hitProps = false; aoe.m_hitTerrain = false;
+            aoe.m_hitInterval = 0f; aoe.m_placeOnGround = true;
+            aoe.m_skill = Skills.SkillType.Axes;
+            var burst = PrefabManager.Cache.GetPrefab<GameObject>("fx_fenring_icenova");
+            if (burst) aoe.m_initiateEffect = new EffectList { m_effectPrefabs = new[] { new EffectList.EffectData { m_prefab = burst, m_enabled = true, m_variant = -1 } } };
+            else Plugin.Log.LogWarning("The ice burst effect fx_fenring_icenova wasn't found; the burst still hits.");
+            PrefabManager.Instance.AddPrefab(go);
+            return go;
+        }
+
         // A spinning pivot at the balance point holding the axe with its blades upright in the flight plane. The pivot turns
         // about its own X axis (across the flight), so the axe tumbles within the blades' plane. Also used for the return.
         internal static GameObject SpinningModel(Transform parent, string name)
@@ -233,6 +259,25 @@ namespace PotatoFighter
                 if (Mathf.Approximately(speed, current)) return;
                 current = speed;
                 Anim(__instance)?.SetSpeed(speed);
+            }
+        }
+
+        // When the chop lands (its trigger, the same moment its hit is checked), the ice bursts in front of the player.
+        [HarmonyPatch(typeof(Attack), nameof(Attack.OnAttackTrigger))]
+        private static class Chop
+        {
+            private static readonly AccessTools.FieldRef<Attack, Humanoid> Owner = AccessTools.FieldRefAccess<Attack, Humanoid>("m_character");
+
+            private static void Postfix(Attack __instance)
+            {
+                if (!iceBurst || axeSpecial == null || __instance.m_attackAnimation != axeSpecial.m_attackAnimation || AttackCancel.IsCancelled(__instance)) return;
+                var owner = Owner(__instance);
+                if (!owner || owner != Player.m_localPlayer) return;
+                var weapon = __instance.GetWeapon();
+                if (!Is(weapon)) return;
+                var t = owner.transform;
+                var go = Object.Instantiate(iceBurst, t.position + t.forward * IceBurstReach + Vector3.up * 0.2f, t.rotation);
+                go.GetComponent<IProjectile>()?.Setup(owner, Vector3.zero, -1f, null, weapon, null);
             }
         }
 
