@@ -8,6 +8,7 @@ from PIL import Image
 
 R, OUT_PX, UP = 320, 40, 2    # render size, pixel-art size, blow-up (40 px art shown at 80 px, like PotatoFarmer's)
 OUTLINE = np.array([38, 24, 14]) / 255.0
+COVER = 0.45   # share of a pixel the model must cover to be drawn (lower keeps thin diagonal parts unbroken)
 
 # ---------- noise and materials ----------
 
@@ -201,7 +202,7 @@ def render(parts, yaw=35, pitch=25, fov=28, light=(-0.5, 0.8, 0.6)):
     k = R // OUT_PX
     a = alpha.reshape(OUT_PX, k, OUT_PX, k).mean((1, 3))
     c = (img * alpha[..., None]).reshape(OUT_PX, k, OUT_PX, k, 3).sum((1, 3)) / np.maximum(a * k * k, 1e-6)[..., None]
-    solid = a > 0.45
+    solid = a > COVER
     out = np.zeros((OUT_PX, OUT_PX, 4))
     out[solid, :3] = c[solid]; out[solid, 3] = 1
     pad = np.pad(solid, 1)
@@ -291,7 +292,7 @@ def finish_px(img, alpha):
     k = R // OUT_PX
     a = alpha.reshape(OUT_PX, k, OUT_PX, k).mean((1, 3))
     c = (img * alpha[..., None]).reshape(OUT_PX, k, OUT_PX, k, 3).sum((1, 3)) / np.maximum(a * k * k, 1e-6)[..., None]
-    solid = a > 0.45
+    solid = a > COVER
     out = np.zeros((OUT_PX, OUT_PX, 4))
     out[solid, :3] = c[solid]; out[solid, 3] = 1
     pad = np.pad(solid, 1)

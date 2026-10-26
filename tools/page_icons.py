@@ -1,5 +1,5 @@
 # PotatoFighter page icons: the Kraken Axe from its game model (assets/kraken_axe.mesh), three angles, plus a shield for
-# attack cancel. Uses render_icons.py (the Potato renderer) and pixel_finish.py (the pixel-art finishing pass).
+# attack cancel (Potato Tweaks' shield icon, copied in). Uses render_icons.py (the Potato renderer) and pixel_finish.py (the pixel-art finishing pass).
 #   python3 -I tools/page_icons.py docs/images
 import os, sys, struct
 import numpy as np
@@ -7,6 +7,7 @@ from PIL import Image
 sys.path.insert(0, os.path.dirname(__file__))
 import trimesh
 import render_icons as ri
+ri.COVER = 0.3   # the haft is about 2 px wide on a diagonal: at 0.45 it broke into steps
 from pixel_finish import finish
 
 out = sys.argv[1]; os.makedirs(out, exist_ok=True)
@@ -37,13 +38,25 @@ def axe(yaw, pitch, lean=-42):
     # Turned to the angle, then leaned so the haft runs corner to corner like the game's weapon icons.
     m = mesh.copy()
     m.apply_transform(rot([0, 0, 1], lean) @ rot([1, 0, 0], pitch) @ rot([0, 1, 0], yaw))
-    return finish(ri.render([(m, mat)], yaw=0, pitch=0, fov=26))
+    return despike(finish(ri.render([(m, mat)], yaw=0, pitch=0, fov=26)))
+
+def despike(img):
+    # Drop pixels of the shape that touch it on one side only (one-pixel spikes on the blade's points), and their outline.
+    a = np.asarray(img.resize((40, 40), Image.NEAREST)).copy()
+    outline_px = a[..., 3] > 0
+    for _ in range(2):
+        inner = outline_px.copy()
+        pad = np.pad(inner, 1)
+        n = pad[:-2, 1:-1].astype(int) + pad[2:, 1:-1] + pad[1:-1, :-2] + pad[1:-1, 2:]
+        lone = inner & (n <= 1)
+        a[lone] = 0; outline_px &= ~lone
+    return Image.fromarray(a, "RGBA").resize((80, 80), Image.NEAREST)
 
 shots = {"axe-front": (-12, 8), "axe-turned": (38, 10), "axe-back": (165, 14)}
 done = []
 for name, (yaw, pitch) in shots.items():
     im = axe(yaw, pitch); im.save(os.path.join(out, f"icon-{name}.png")); done.append(im)
-sh = finish(ri.shield()); sh.save(os.path.join(out, "icon-shield.png")); done.append(sh)
+sh = Image.open(os.path.join(out, "icon-shield.png")).convert("RGBA"); done.append(sh)   # Potato Tweaks' shield icon
 sheet = Image.new("RGBA", (len(done) * 88, 88), (58, 50, 44, 255))
 for i, im in enumerate(done): sheet.paste(im, (i * 88 + 4, 4), im)
 sheet.resize((sheet.width * 2, sheet.height * 2), Image.NEAREST).save(os.path.join(out, "_sheet.png"))
