@@ -24,6 +24,9 @@ namespace PotatoFighter
         private static readonly Color FrostColor = new Color(0.35f, 0.75f, 1f);
         private const float GlowStrength = 1.4f;
         private const float LightIntensity = 0.6f, LightRange = 3f;
+        internal const float MaxFlightSeconds = 1.7f; // about 55 m: past that without a hit, it turns round by itself
+        internal const float ThrowSpeed = 32f;      // m/s leaving the hand (the spear: 20)
+        private const float ThrowAnimSpeed = 1.35f; // the spear's throw animation played faster: a snappier arm, earlier release
 
         private static Mesh mesh;
         private static Material material;
@@ -109,8 +112,8 @@ namespace PotatoFighter
             var spear = PrefabManager.Cache.GetPrefab<GameObject>("SpearBronze").GetComponent<ItemDrop>().m_itemData.m_shared.m_secondaryAttack;
             throwAttack = spear.Clone();
             throwAttack.m_attackProjectile = projectile;
-            throwAttack.m_projectileVel = 28f;
-            throwAttack.m_projectileVelMin = 28f;
+            throwAttack.m_projectileVel = ThrowSpeed;
+            throwAttack.m_projectileVelMin = ThrowSpeed;
             throwAttack.m_attackStamina = 18f;
             shared.m_secondaryAttack = throwAttack;
 
@@ -204,10 +207,31 @@ namespace PotatoFighter
             try
             {
                 var prefab = PrefabManager.Instance.GetPrefab(PrefabName);
-                var sprite = RenderManager.Instance.Render(prefab, RenderManager.IsometricRotation);
+                // Like the game's weapon icons: lying diagonally, haft from bottom left to head top right, flat side to us.
+                var sprite = RenderManager.Instance.Render(prefab, Quaternion.LookRotation(new Vector3(1f, 1f, 0f), Vector3.back));
                 if (sprite) prefab.GetComponent<ItemDrop>().m_itemData.m_shared.m_icons = new[] { sprite };
             }
             catch (System.Exception e) { Plugin.Log.LogWarning($"Kraken Axe icon: {e.Message}"); }
+        }
+
+        // The throw's arm swing, played faster. ZSyncAnimation's speed is synced, so everyone sees the same throw; it goes
+        // back to normal as soon as the throw ends (or is cancelled).
+        [HarmonyPatch(typeof(Player), "Update")]
+        private static class ThrowAnimation
+        {
+            private static readonly AccessTools.FieldRef<Character, ZSyncAnimation> Anim = AccessTools.FieldRefAccess<Character, ZSyncAnimation>("m_zanim");
+            private static readonly AccessTools.FieldRef<Humanoid, Attack> Current = AccessTools.FieldRefAccess<Humanoid, Attack>("m_currentAttack");
+            private static bool sped;
+
+            private static void Postfix(Player __instance)
+            {
+                if (__instance != Player.m_localPlayer || throwAttack == null) return;
+                var attack = Current(__instance);
+                bool throwing = attack != null && __instance.InAttack() && attack.m_attackAnimation == throwAttack.m_attackAnimation && Is(attack.GetWeapon());
+                if (throwing == sped) return;
+                sped = throwing;
+                Anim(__instance)?.SetSpeed(throwing ? ThrowAnimSpeed : 1f);
+            }
         }
 
         // Middle mouse throws; Shift (the run key) + middle mouse is the axe's own chop. The attack is picked just before

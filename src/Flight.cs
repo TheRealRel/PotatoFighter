@@ -53,9 +53,13 @@ namespace PotatoFighter
         private static class Landed
         {
             private static bool Prepare() => Diagnostics;
-            private static void Prefix(Projectile __instance)
+            private static void Prefix(Projectile __instance, Collider collider)
             {
                 if (!Diagnostics || !tracks.TryGetValue(__instance, out var t)) return;
+                var target = collider ? collider.GetComponentInParent<Character>() : null;
+                var thing = target ? target.m_name : collider ? collider.transform.root.name : "nothing";
+                Plugin.Log.LogInfo($"[Flight] {t.Name} hit {Localization.instance.Localize(thing)} carrying {F(__instance.m_damage.GetTotalDamage())} damage " +
+                    $"(slash {F(__instance.m_damage.m_slash)}, frost {F(__instance.m_damage.m_frost)}, spirit {F(__instance.m_damage.m_spirit)})");
                 tracks.Remove(__instance);
                 var end = __instance.transform.position;
                 var flat = new Vector3(end.x - t.Start.x, 0f, end.z - t.Start.z).magnitude;

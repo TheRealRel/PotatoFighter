@@ -33,6 +33,7 @@ namespace PotatoFighter
             public Vector3 Where;
             public bool Called;
             public float CalledAt;
+            public float ThrownAt;
             public Minimap.PinData Pin;
             public GameObject Beam;
         }
@@ -139,9 +140,23 @@ namespace PotatoFighter
                 GameObject go = t.Drop.IsNone() ? null : ZNetScene.instance.FindInstance(t.Drop);
                 if (go) t.Where = go.transform.position;
 
-                // In the air: wait for it to land (the drop is caught as it happens).
+                // In the air: wait for it to land (the drop is caught as it happens). A magical axe turns round in the air
+                // when called, and on its own once it has flown its range without hitting anything.
                 if (t.FlyingItem != null && t.Drop.IsNone())
                 {
+                    if (t.Flying && t.Prefab == KrakenAxe.PrefabName && (t.Called || Time.time - t.ThrownAt > KrakenAxe.MaxFlightSeconds))
+                    {
+                        var from = t.Flying.transform.position;
+                        var item = t.FlyingItem;
+                        var slot = new Thrown { Name = t.Name, Prefab = t.Prefab, Slot = t.Slot, Hand = t.Hand };
+                        var view = t.Flying.GetComponent<ZNetView>();
+                        if (view && view.IsValid() && view.IsOwner()) ZNetScene.instance.Destroy(t.Flying.gameObject);
+                        else Destroy(t.Flying.gameObject);
+                        Forget(i);
+                        changed = true;
+                        ReturnFlight.Begin(player, item, slot, from);
+                        continue;
+                    }
                     if (t.Flying) continue;
                     // The projectile is gone without dropping anything (lost in lava, or it timed out). The weapon no
                     // longer exists anywhere, so a recall this session can still bring it back.
@@ -232,6 +247,10 @@ namespace PotatoFighter
             private float time, duration;
             private Transform pivot;
             private bool delivered;
+            private Vector3 last;
+            private readonly HashSet<Character> struck = new HashSet<Character>();
+            private const float ReturnDamage = 0.75f, HitRadius = 0.45f;
+            private static int characterMask;
 
             internal static void Begin(Player player, ItemDrop.ItemData item, Thrown slot, Vector3 from)
             {
@@ -241,6 +260,8 @@ namespace PotatoFighter
                 flight.player = player; flight.item = item; flight.slot = slot; flight.from = from;
                 flight.duration = Mathf.Clamp(Vector3.Distance(from, Hand(player)) / Speed, MinTime, MaxTime);
                 flight.pivot = KrakenAxe.SpinningModel(go.transform, "spin").transform;
+                flight.last = from;
+                if (characterMask == 0) characterMask = LayerMask.GetMask("character", "character_net", "character_ghost", "hitbox", "character_noenv");
             }
 
             private static Vector3 Hand(Player p)
@@ -260,11 +281,42 @@ namespace PotatoFighter
                 var dir = to - pos;
                 if (dir.sqrMagnitude > 1e-4f) transform.rotation = Quaternion.LookRotation(dir);
                 transform.position = pos;
+                Strike(last, pos);
+                last = pos;
                 if (pivot) pivot.Rotate(Spin * Time.deltaTime, 0f, 0f, Space.Self);
                 if (k >= 1f) { Deliver(); Destroy(gameObject); }
             }
 
             private void OnDestroy() => Deliver();
+
+            // Enemies the axe passes through on its way back take a hit (once each, 75% of a swing's damage), like the
+            // throw; tamed animals, other players and anything the game doesn't count as an enemy are left alone.
+            private void Strike(Vector3 a, Vector3 b)
+            {
+                var dir = b - a;
+                float dist = dir.magnitude;
+                if (dist < 1e-4f || item?.m_shared == null) return;
+                foreach (var hit in Physics.SphereCastAll(a, HitRadius, dir / dist, dist, characterMask, QueryTriggerInteraction.Ignore))
+                {
+                    var c = hit.collider ? hit.collider.GetComponentInParent<Character>() : null;
+                    if (!c || c == player || c.IsDead() || struck.Contains(c) || !BaseAI.IsEnemy(player, c)) continue;
+                    struck.Add(c);
+                    var data = new HitData();
+                    data.m_damage = item.GetDamage();
+                    data.m_damage.Modify(ReturnDamage * player.GetRandomSkillFactor(item.m_shared.m_skillType));
+                    data.m_point = hit.point == Vector3.zero ? c.GetCenterPoint() : hit.point;
+                    data.m_dir = dir / dist;
+                    data.m_pushForce = item.m_shared.m_attackForce * 0.5f;
+                    data.m_skill = item.m_shared.m_skillType;
+                    data.m_toolTier = (short)item.m_shared.m_toolTier;
+                    data.m_hitType = HitData.HitType.PlayerHit;
+                    data.m_ranged = true;
+                    data.SetAttacker(player);
+                    c.Damage(data);
+                    item.m_shared.m_hitEffect.Create(data.m_point, Quaternion.identity);
+                    player.RaiseSkill(item.m_shared.m_skillType, 1f);
+                }
+            }
 
             private void Deliver()
             {
@@ -388,7 +440,7 @@ namespace PotatoFighter
             private static void Postfix(Projectile __instance, Character owner, ItemDrop.ItemData item)
             {
                 if (!Plugin.RecallEnabled.Value || item?.m_shared == null || !__instance.m_respawnItemOnHit || owner == null || owner != Player.m_localPlayer || !Recallable(item)) return;
-                thrown.Add(new Thrown { Hand = HandOf(item.m_shared.m_itemType), Name = item.m_shared.m_name, Prefab = item.m_dropPrefab ? item.m_dropPrefab.name : null, Slot = item.m_gridPos, Flying = __instance, FlyingItem = item, Where = owner.transform.position });
+                thrown.Add(new Thrown { Hand = HandOf(item.m_shared.m_itemType), Name = item.m_shared.m_name, Prefab = item.m_dropPrefab ? item.m_dropPrefab.name : null, Slot = item.m_gridPos, Flying = __instance, FlyingItem = item, Where = owner.transform.position, ThrownAt = Time.time });
             }
         }
 
