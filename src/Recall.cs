@@ -93,13 +93,21 @@ namespace PotatoFighter
             return drop?.m_itemData?.m_shared != null ? HandOf(drop.m_itemData.m_shared.m_itemType) : Hand.Right;
         }
 
-        // A hand holding nothing, sheathed weapons included (pressing the throw button then just draws them as usual).
+        // A hand holding nothing, sheathed weapons included (pressing the throw button then just draws them as usual). A bow
+        // or other two-handed weapon fills both hands, as the game treats it: equipping one empties the other hand, and its
+        // throw button belongs to it (Better Archery's kick with a bow, a battleaxe's own secondary).
         private static bool HandEmpty(Player player, Hand hand)
         {
-            bool right = player.RightItem == null && HiddenRight(player) == null;
-            bool left = player.LeftItem == null && HiddenLeft(player) == null;
+            var rightItem = player.RightItem ?? HiddenRight(player);
+            var leftItem = player.LeftItem ?? HiddenLeft(player);
+            bool bothTaken = Fills(rightItem) || Fills(leftItem);
+            bool right = rightItem == null && !bothTaken;
+            bool left = leftItem == null && !bothTaken;
             return hand == Hand.Right ? right : hand == Hand.Left ? left : right && left;
         }
+
+        private static bool Fills(ItemDrop.ItemData item) => item?.m_shared != null && HandOf(item.m_shared.m_itemType) == Hand.Both ||
+            item?.m_shared?.m_itemType == ItemDrop.ItemData.ItemType.Bow;
 
         private static bool CanCall(Player player, Thrown t) => !t.Called && HandEmpty(player, t.Hand);
 
