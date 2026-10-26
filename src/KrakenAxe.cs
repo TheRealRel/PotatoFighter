@@ -21,6 +21,7 @@ namespace PotatoFighter
         internal const string IceBurstName = "potato_kraken_iceburst";
         private const string IceBurstEffect = "fx_DvergerMage_Ice_hit"; // a single, sharp ice impact with a flash of light
         private const float IceBurstFrost = 60f, IceBurstFrostPerLevel = 8f, IceBurstReach = 1.8f;
+        private const float IceBurstRadius = 2.9f;  // at "Explosion size" 100
         private const float IceLookRadius = 2.5f;   // the reach the ice effect's own size matches; it's scaled from there
         private const string Model = "kraken_axe";
         private const float BalanceZ = 0.45f;     // the balance point along the haft (heavy head), metres from the hand
@@ -232,16 +233,16 @@ namespace PotatoFighter
             PrefabManager.Instance.AddPrefab(go);
             iceBurst = go;
             ApplyIceRadius();
-            Plugin.IceRadius.SettingChanged += (_, __) => ApplyIceRadius();
+            Plugin.ExplosionSize.SettingChanged += (_, __) => ApplyIceRadius();
             return go;
         }
 
-        // The "Explosion radius" setting (set by the server, so every player's game draws the same size): the reach of the
+        // The "Explosion size" setting (set by the server, so every player's game draws the same size): the reach of the
         // damage, and the ice effect scaled to match.
         private static void ApplyIceRadius()
         {
             if (!iceBurst) return;
-            float radius = Plugin.IceRadius.Value;
+            float radius = IceBurstRadius * Plugin.ExplosionSize.Value / 100f;
             var aoe = iceBurst.GetComponent<Aoe>();
             if (aoe) aoe.m_radius = radius;
             if (!iceEffect) return;
@@ -327,7 +328,7 @@ namespace PotatoFighter
                 ApplyIceRadius();
                 var go = Object.Instantiate(iceBurst, t.position + t.forward * IceBurstReach + Vector3.up * 0.2f, t.rotation);
                 go.GetComponent<IProjectile>()?.Setup(owner, Vector3.zero, -1f, null, weapon, null);
-                if (Plugin.TestBuild) Plugin.Log.LogInfo($"[Ice] burst at the chop ({Time.frameCount}), {Plugin.IceRadius.Value:0.0} m");
+                if (Plugin.TestBuild) Plugin.Log.LogInfo($"[Ice] burst at the chop ({Time.frameCount}), {IceBurstRadius * Plugin.ExplosionSize.Value / 100f:0.0} m");
             }
         }
 
