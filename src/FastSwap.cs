@@ -22,7 +22,7 @@ namespace PotatoFighter
     internal static class FastSwap
     {
         internal const string OtherModId = "com.skarif.fastswap";
-        private const float SheathSeconds = 0.9f;      // the equip_hip animation, about
+        private const float SwapCap = 2.5f;            // longest a switch or sheathing animation is treated as one
         private const float InterruptSeconds = 1f;     // longest wait for the animator to leave the cut-short state
 
         private static readonly AccessTools.FieldRef<Player, List<Player.MinorActionData>> Queue =
@@ -30,7 +30,23 @@ namespace PotatoFighter
         private static readonly AccessTools.FieldRef<Player, string> ActionAnimation = AccessTools.FieldRefAccess<Player, string>("m_actionAnimation");
         private static readonly AccessTools.FieldRef<Character, ZSyncAnimation> Zanim = AccessTools.FieldRefAccess<Character, ZSyncAnimation>("m_zanim");
 
-        private static float sheathUntil = -1f, interruptUntil = -1f;
+        // A hand switch's queue entry lasts only its equip time (0.2 s for an axe), but the animation it starts, which is what
+        // slows walking, plays on well after that. So a switch counts from when it's queued until the animator has entered
+        // and left the slowing state (or SwapCap seconds, whichever is first). Sheathing with R starts the same way.
+        private static bool swapActive, sawSlowdown;
+        private static float swapStarted = -1f, interruptUntil = -1f;
+
+        // Test builds only (removed for the release): one log line per switch, how long it slowed and how much we lifted.
+        internal const bool Diagnostics = true;
+        private static int slowFrames, liftedFrames;
+
+        private static void StartSwap()
+        {
+            slowFrames = liftedFrames = 0;
+            swapActive = true;
+            sawSlowdown = false;
+            swapStarted = Time.time;
+        }
 
         private static bool On(Character character) =>
             Plugin.FastSwapEnabled.Value && character && character == Player.m_localPlayer && !Chainloader.PluginInfos.ContainsKey(OtherModId);
@@ -57,12 +73,12 @@ namespace PotatoFighter
         private static bool HandAction(Player.MinorActionData action) =>
             action != null && action.m_type != Player.MinorActionData.ActionType.Reload && HandItem(action.m_item);
 
-        // The minor action playing now is a hand switch or the sheathing animation.
+        // The minor action playing now is a hand switch or the sheathing animation (an armor change queued first isn't).
         private static bool Swapping(Player player)
         {
-            if (Time.time < sheathUntil) return true;
             var queue = Queue(player);
-            return queue != null && queue.Count > 0 && HandAction(queue[0]);
+            if (queue != null && queue.Count > 0) return HandAction(queue[0]);
+            return swapActive && Time.time - swapStarted < SwapCap;
         }
 
         // On the run on the ground, a swap costs stamina; without enough, it's refused like the game refuses it on the run.
@@ -86,7 +102,19 @@ namespace PotatoFighter
         {
             private static void Postfix(Player __instance, ref bool __result)
             {
-                if (__result && On(__instance) && Swapping(__instance)) __result = false;
+                if (__instance != Player.m_localPlayer) return;
+                if (swapActive)
+                {
+                    // Over once the animator has been in the slowing state and left it (or never entered it in half a second).
+                    if (__result) { sawSlowdown = true; slowFrames++; }
+                    else if (sawSlowdown || Time.time - swapStarted > 0.5f)
+                    {
+                        swapActive = false;
+                        if (Diagnostics) Plugin.Log.LogInfo($"[Swap] over after {Time.time - swapStarted:0.00} s: the game slowed {slowFrames} frames, fast swap lifted {liftedFrames}");
+                    }
+                }
+                if (__result && On(__instance) && Swapping(__instance)) { __result = false; liftedFrames++; }
+                else if (__result && Diagnostics && Time.frameCount % 30 == 0) Plugin.Log.LogInfo($"[Swap] slowed, not lifted: queue {Queue(__instance)?.Count ?? -1}, swap {(swapActive ? "on" : "off")}");
             }
         }
 
@@ -127,7 +155,7 @@ namespace PotatoFighter
             private static void Clear(Humanoid humanoid) => ClearMethod.Invoke(humanoid, null);
         }
 
-        // A switch started on the run pays its stamina (or is refused).
+        // A hand switch starts counting here; one started on the run pays its stamina (or is refused).
         [HarmonyPatch]
         internal static class SprintCost
         {
@@ -139,7 +167,9 @@ namespace PotatoFighter
 
             private static void Postfix(Player __instance, ItemDrop.ItemData item)
             {
-                if (!On(__instance) || !Plugin.FastSwapSprint.Value || !HandItem(item) || !__instance.IsRunning()) return;
+                if (!On(__instance) || !HandItem(item)) return;
+                StartSwap();
+                if (!Plugin.FastSwapSprint.Value || !__instance.IsRunning()) return;
                 var queue = Queue(__instance);
                 if (queue == null || queue.Count == 0) return;
                 var added = queue[queue.Count - 1];
@@ -162,7 +192,7 @@ namespace PotatoFighter
             {
                 var player = __instance as Player;
                 if (!On(player)) return;
-                sheathUntil = Time.time + SheathSeconds;
+                StartSwap();
                 if (player.IsRunning() && Plugin.FastSwapSprint.Value) PaySprint(player);
             }
         }
@@ -185,7 +215,7 @@ namespace PotatoFighter
                 Zanim(player)?.SetBool(animation, false);
                 ActionAnimation(player) = null;
             }
-            sheathUntil = -1f;
+            swapActive = false;
             interruptUntil = Time.time + InterruptSeconds;
         }
 
