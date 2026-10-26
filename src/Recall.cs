@@ -45,6 +45,9 @@ namespace PotatoFighter
         // press (or hold) that called it back doesn't throw it again straight away.
         private const float ThrowPause = 0.4f;
         private static bool waitForRelease;
+        private static ItemDrop.ItemData pendingEquip;
+        private static Hand pendingHand;
+        private static float pendingUntil;
         private static float pauseUntil;
         private static Projectile landing;   // the projectile whose item is being dropped right now
         private static Player loadedFor;
@@ -62,6 +65,7 @@ namespace PotatoFighter
             {
                 if (loadedFor != player) Load(player);
                 Tick(player);
+                EquipPending(player);
             }
             catch (Exception e)
             {
@@ -234,6 +238,19 @@ namespace PotatoFighter
             if (changed) Save(player);
         }
 
+        private static void EquipPending(Player player)
+        {
+            if (pendingEquip == null) return;
+            if (Time.time > pendingUntil || !player.GetInventory().ContainsItem(pendingEquip) || player.IsItemEquiped(pendingEquip) || !HandEmpty(player, pendingHand))
+            {
+                pendingEquip = null;
+                return;
+            }
+            if (player.InAttack()) return;
+            if (player.EquipItem(pendingEquip)) Trace($"{pendingEquip.m_shared.m_name}: equipped after the attack ended");
+            pendingEquip = null;
+        }
+
         // Into the slot it was thrown from if that's free, otherwise anywhere; in hand if the hands are empty.
         private static bool GiveBack(Player player, ItemDrop.ItemData item, Thrown t)
         {
@@ -248,9 +265,14 @@ namespace PotatoFighter
                 return false;
             }
             var held = inventory.GetAllItems().FirstOrDefault(x => x == item) ?? inventory.GetItemAt(t.Slot.x, t.Slot.y);
-            bool equip = held != null && held.IsWeapon() && HandEmpty(player, t.Hand);
-            if (equip) player.EquipItem(held);
-            Trace($"{t.Name}: back {(equip ? "in hand" : "in the inventory (hand not empty)")}, slot {(slotFree ? "its own" : "another")}");
+            string result = "in the inventory (hand not empty)";
+            if (held != null && held.IsWeapon() && HandEmpty(player, t.Hand))
+            {
+                // The game won't equip during an attack (a kick, a swing): then equip it as soon as the hand is free.
+                if (!player.InAttack() && player.EquipItem(held)) result = "in hand";
+                else { pendingEquip = held; pendingHand = t.Hand; pendingUntil = Time.time + 3f; result = "in hand once the current attack ends"; }
+            }
+            Trace($"{t.Name}: back {result}, slot {(slotFree ? "its own" : "another")}");
             player.m_pickupEffects.Create(player.transform.position, Quaternion.identity);
             waitForRelease = true;
             pauseUntil = Time.time + ThrowPause;
@@ -269,6 +291,8 @@ namespace PotatoFighter
             private float time, duration;
             private Transform pivot;
             private bool delivered, reached;
+            internal static int Active;
+            private bool counted;
             // The catch: the game's own interact reach (the hand going out, as at a chest), started a moment before the
             // axe arrives so the hand is out as it lands. Synced, like any animation trigger.
             private const float ReachLead = 0.3f;
@@ -286,6 +310,8 @@ namespace PotatoFighter
                 flight.player = player; flight.item = item; flight.slot = slot; flight.from = from;
                 flight.duration = Mathf.Clamp(Vector3.Distance(from, Hand(player)) / Speed, MinTime, MaxTime);
                 flight.pivot = KrakenAxe.SpinningModel(go.transform, "spin").transform;
+                flight.counted = true;
+                Active++;
                 flight.last = from;
                 if (characterMask == 0) characterMask = LayerMask.GetMask("character", "character_net", "character_ghost", "hitbox", "character_noenv");
             }
@@ -358,6 +384,7 @@ namespace PotatoFighter
 
             private void Deliver()
             {
+                if (counted) { counted = false; Active = Mathf.Max(0, Active - 1); }
                 if (delivered) return;
                 delivered = true;
                 var p = player ? player : Player.m_localPlayer;
@@ -514,6 +541,14 @@ namespace PotatoFighter
         {
             private static void Prefix(Player __instance, ref bool secondaryAttack, ref bool secondaryAttackHold)
             {
+                // While a weapon flies back, the button does nothing (no unarmed kick that would keep the hand busy).
+                if (__instance == Player.m_localPlayer && ReturnFlight.Active > 0)
+                {
+                    if (secondaryAttack || secondaryAttackHold) waitForRelease = true;
+                    secondaryAttack = false;
+                    secondaryAttackHold = false;
+                    return;
+                }
                 if (__instance == Player.m_localPlayer && (waitForRelease || Time.time < pauseUntil))
                 {
                     if (!secondaryAttack && !secondaryAttackHold) waitForRelease = false;
