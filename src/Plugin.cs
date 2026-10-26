@@ -19,26 +19,31 @@ namespace PotatoFighter
     [BepInDependency(Jotunn.Main.ModGuid)]
     // Optional: when Epic Loot is installed it loads first, so its Triple Shot and Throwable code can be found by name.
     [BepInDependency("randyknapp.mods.epicloot", BepInDependency.DependencyFlags.SoftDependency)]
+    // Optional: so their presence is known when PotatoFighter decides whether its creature levels stand aside.
+    [BepInDependency(Creatures.SlsId, BepInDependency.DependencyFlags.SoftDependency)]
+    [BepInDependency(Creatures.CllcId, BepInDependency.DependencyFlags.SoftDependency)]
     [NetworkCompatibility(CompatibilityLevel.EveryoneMustHaveMod, VersionStrictness.Minor)]
     public class Plugin : BaseUnityPlugin
     {
-        public const string Id = "potato.fighter", Version = "1.0.0";
+        public const string Id = "potato.fighter", Version = "1.1.0";
         // Test builds let every thrown weapon be recalled (the game's spears, modded javelins and throwing axes) so the
         // recall can be tried before PotatoFighter has weapons of its own. Release builds recall only OwnWeapons.
         internal const bool TestBuild = false;
         // Prefab names of PotatoFighter's own returning weapons; each weapon adds itself when it's made (KrakenAxe.Create).
         internal static readonly System.Collections.Generic.HashSet<string> OwnWeapons = new System.Collections.Generic.HashSet<string>();
-        // Two sections, so Configuration Manager stays short; settings sharing one start with what they belong to.
+        // Three sections, so Configuration Manager stays short; settings sharing one start with what they belong to.
         // No apostrophes or = \ " [ ] in names: BepInEx rejects them.
         private const string WeaponSection = "1 - Weapons";
         private const string CombatSection = "2 - Combat";
+        private const string CreatureSection = "3 - Creatures";
 
         internal static ManualLogSource Log;
         internal static ConfigEntry<bool> RecallEnabled, RecallPin, Beam, AttackCancelEnabled, KeepFastShots, FastSwapEnabled, FastSwapSprint, FastSwapAttack;
         internal static ConfigEntry<int> FastSwapStamina;
         internal static ConfigEntry<Color> BeamColor;
         internal static ConfigEntry<int> ExplosionSize;
-        internal static ConfigEntry<bool> RecallStamina;
+        internal static ConfigEntry<bool> RecallStamina, CreatureLevels;
+        internal static ConfigEntry<int> CreatureMaxStars, CreatureStarChance, CreatureModifierChance, OffspringModifierChance;
         internal const float RecallStaminaCost = 15f;   // at skill 0; less with skill, free at 100
 
         private void Awake()
@@ -68,16 +73,29 @@ namespace PotatoFighter
                 new ConfigDescription("Attacking (or drawing a bow) during a weapon switch finishes the switch at once and goes ahead with the new weapon, instead of waiting for it. Needs Fast swap. Set by the server.", null, serverSet));
             ExplosionSize = Config.Bind(WeaponSection, "Explosion size", 100,
                 new ConfigDescription("The size of every PotatoFighter weapon's explosions, in percent of its own size (the Kraken Axe's ice explosion: 2.9 m at 100). Both the reach of the damage and the effect grow and shrink with it. Set by the server.", new AcceptableValueRange<int>(50, 200), serverSet));
+            CreatureLevels = Config.Bind(CreatureSection, "Creature levels", true,
+                new ConfigDescription("Creatures spawn with extra stars, more in biomes behind the world's boss progress, and some with a modifier (Armored, Quick, Fierce, Regenerating, Splitting) that their young can inherit. Creatures loaded from the world keep their level, except wild ones above Creature max stars, which get one new roll. Off by itself when StarLevelSystem or Creature Level and Loot Control is installed. Set by the server.", null, serverSet));
+            CreatureMaxStars = Config.Bind(CreatureSection, "Creature max stars", 5,
+                new ConfigDescription("Most stars a creature can spawn with. Set by the server.", new AcceptableValueRange<int>(2, 10), serverSet));
+            CreatureStarChance = Config.Bind(CreatureSection, "Creature star chance", 100,
+                new ConfigDescription("How likely extra stars are, in percent of the normal chance (0: only the game's own stars). Set by the server.", new AcceptableValueRange<int>(0, 300), serverSet));
+            CreatureModifierChance = Config.Bind(CreatureSection, "Creature modifier chance", 100,
+                new ConfigDescription("How likely a creature with stars spawns with a modifier, in percent of the normal chance (15% at 1 star to 35% at 5). 0: no modifiers. Set by the server.", new AcceptableValueRange<int>(0, 300), serverSet));
+            OffspringModifierChance = Config.Bind(CreatureSection, "Offspring modifier chance", 50,
+                new ConfigDescription("Chance in percent that a newborn keeps its parent's modifier. A youngster always keeps its own when it grows up. Set by the server.", new AcceptableValueRange<int>(0, 100), serverSet));
             if (!hadCancel) CarryOverFromTweaks();
 
             harmony = new Harmony(Id);
             var nested = typeof(Recall).GetNestedTypes(AccessTools.all).Concat(typeof(Flight).GetNestedTypes(AccessTools.all))
                 .Concat(typeof(AttackCancel).GetNestedTypes(AccessTools.all)).Concat(typeof(FastSwap).GetNestedTypes(AccessTools.all)).Concat(typeof(EpicLootThrowable).GetNestedTypes(AccessTools.all)).Concat(typeof(KrakenAxe).GetNestedTypes(AccessTools.all));
+            if (Creatures.StandAside) Log.LogWarning("StarLevelSystem or Creature Level and Loot Control is installed, so PotatoFighter's creature levels stay off. Remove it to use them.");
+            else nested = nested.Concat(typeof(Creatures).GetNestedTypes(AccessTools.all)).Concat(typeof(CreatureHud).GetNestedTypes(AccessTools.all));
             foreach (var type in nested) Patch(type);
             foreach (var type in new[] { typeof(Probe), typeof(BowRelease), typeof(QueuedBowRelease), typeof(TripleShotCancel) }) Patch(type);
             // Epic Loot may have set its effect list up before this patch was in place.
             try { EpicLootThrowable.NoThrowableRoll.Exclude(); } catch (Exception e) { Log.LogWarning($"Couldn't keep Throwable off the Kraken Axe: {e.Message}"); }
             gameObject.AddComponent<Recall>();
+            if (!Creatures.StandAside) gameObject.AddComponent<Creatures.Ticker>();
             Assets.Dir = Path.Combine(Path.GetDirectoryName(Info.Location), "assets");
             KrakenAxe.Register();
         }
