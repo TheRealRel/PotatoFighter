@@ -32,7 +32,8 @@ namespace PotatoFighter
         private const string CombatSection = "2 - Combat";
 
         internal static ManualLogSource Log;
-        internal static ConfigEntry<bool> RecallEnabled, RecallPin, Beam, AttackCancelEnabled, KeepFastShots;
+        internal static ConfigEntry<bool> RecallEnabled, RecallPin, Beam, AttackCancelEnabled, KeepFastShots, FastSwapEnabled;
+        internal static ConfigEntry<int> FastSwapStamina;
         internal static ConfigEntry<Color> BeamColor;
         internal static ConfigEntry<int> ExplosionSize;
         internal static ConfigEntry<bool> RecallStamina;
@@ -55,13 +56,17 @@ namespace PotatoFighter
                 new ConfigDescription("Pressing block during an attack's windup or recovery abandons the attack and raises the guard at once, so you can parry mid-swing. A hit the swing hasn't reached never lands; stamina already paid and a hit already dealt stay. Cancelling never lets you attack faster. Set by the server.", null, serverSet));
             KeepFastShots = Config.Bind(CombatSection, "Keep fast bow shots", true,
                 "With a fast draw (high Bows skill, Quick Draw), letting go of a fully drawn arrow before the last shot's animation ends no longer loses the shot: the arrow stays drawn and flies as soon as the bow can fire. Blocking, switching weapons or dying before then cancels it without using an arrow.");
+            FastSwapEnabled = Config.Bind(CombatSection, "Fast swap", true,
+                new ConfigDescription("Switching weapons, shields, torches and tools no longer slows you to a walk, works while sprinting, and an attack (or a bow draw) cuts the switch short and goes ahead with the new weapon. Sheathing and drawing with R don't slow you either. Off by itself when Skarif's FastSwap is installed. Set by the server.", null, serverSet));
+            FastSwapStamina = Config.Bind(CombatSection, "Fast swap stamina while sprinting", 10,
+                new ConfigDescription("Stamina a weapon switch or sheathing costs while sprinting on the ground. Without that much stamina, the switch doesn't happen while you sprint. 0: free. Set by the server.", new AcceptableValueRange<int>(0, 50), serverSet));
             ExplosionSize = Config.Bind(WeaponSection, "Explosion size", 100,
                 new ConfigDescription("The size of every PotatoFighter weapon's explosions, in percent of its own size (the Kraken Axe's ice explosion: 2.9 m at 100). Both the reach of the damage and the effect grow and shrink with it. Set by the server.", new AcceptableValueRange<int>(50, 200), serverSet));
             if (!hadCancel) CarryOverFromTweaks();
 
             harmony = new Harmony(Id);
             var nested = typeof(Recall).GetNestedTypes(AccessTools.all).Concat(typeof(Flight).GetNestedTypes(AccessTools.all))
-                .Concat(typeof(AttackCancel).GetNestedTypes(AccessTools.all)).Concat(typeof(KrakenAxe).GetNestedTypes(AccessTools.all));
+                .Concat(typeof(AttackCancel).GetNestedTypes(AccessTools.all)).Concat(typeof(FastSwap).GetNestedTypes(AccessTools.all)).Concat(typeof(KrakenAxe).GetNestedTypes(AccessTools.all));
             foreach (var type in nested) Patch(type);
             foreach (var type in new[] { typeof(Probe), typeof(BowRelease), typeof(QueuedBowRelease), typeof(TripleShotCancel) }) Patch(type);
             gameObject.AddComponent<Recall>();
