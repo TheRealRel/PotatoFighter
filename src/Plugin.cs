@@ -30,10 +30,12 @@ namespace PotatoFighter
         private const string BeamSection = "2 - Light beam";
         private const string CancelSection = "3 - Attack cancel";
         private const string BowSection = "4 - Bows";
+        private const string KrakenSection = "5 - Kraken Axe";
 
         internal static ManualLogSource Log;
         internal static ConfigEntry<bool> RecallEnabled, RecallPin, Beam, AttackCancelEnabled, KeepFastShots;
         internal static ConfigEntry<Color> BeamColor;
+        internal static ConfigEntry<float> IceRadius;
         internal static ConfigEntry<bool> RecallStamina;
         internal const float RecallStaminaCost = 15f;   // at skill 0; less with skill, free at 100
 
@@ -54,6 +56,8 @@ namespace PotatoFighter
                 new ConfigDescription("Pressing block during an attack's windup or recovery abandons the attack and raises the guard at once, so you can parry mid-swing. A hit the swing hasn't reached never lands; stamina already paid and a hit already dealt stay. Cancelling never lets you attack faster. Set by the server.", null, serverSet));
             KeepFastShots = Config.Bind(BowSection, "Keep fast shots", true,
                 "With a fast draw (high Bows skill, Quick Draw), letting go of a fully drawn arrow before the last shot's animation ends no longer loses the shot: the arrow stays drawn and flies as soon as the bow can fire. Blocking, switching weapons or dying before then cancels it without using an arrow.");
+            IceRadius = Config.Bind(KrakenSection, "Explosion radius", 2.9f,
+                new ConfigDescription("How far the Kraken Axe's ice explosion (Shift + middle mouse) reaches, in metres. The ice effect grows and shrinks with it. Set by the server.", new AcceptableValueRange<float>(1.5f, 5f), serverSet));
             if (!hadCancel) CarryOverFromTweaks();
 
             harmony = new Harmony(Id);

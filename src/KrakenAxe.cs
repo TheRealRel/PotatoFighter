@@ -20,7 +20,8 @@ namespace PotatoFighter
         internal const string ProjectileName = "potato_kraken_axe_projectile";
         internal const string IceBurstName = "potato_kraken_iceburst";
         private const string IceBurstEffect = "fx_DvergerMage_Ice_hit"; // a single, sharp ice impact with a flash of light
-        private const float IceBurstRadius = 2.5f, IceBurstFrost = 60f, IceBurstFrostPerLevel = 8f, IceBurstReach = 1.8f;
+        private const float IceBurstFrost = 60f, IceBurstFrostPerLevel = 8f, IceBurstReach = 1.8f;
+        private const float IceLookRadius = 2.5f;   // the reach the ice effect's own size matches; it's scaled from there
         private const string Model = "kraken_axe";
         private const float BalanceZ = 0.45f;     // the balance point along the haft (heavy head), metres from the hand
         private const float SpinPerSecond = 792f;  // degrees a second, end over end: 2 turns, 12 deg a frame at 60 fps (no strobing at 30)
@@ -35,7 +36,9 @@ namespace PotatoFighter
         private static Mesh mesh;
         private static Material material;
         private static Attack throwAttack, axeSpecial;
-        private static GameObject iceBurst;
+        private static GameObject iceBurst, iceEffect;
+        private static Light[] iceLights;
+        private static float[] iceLightRanges;
 
         internal static void Register()
         {
@@ -198,7 +201,6 @@ namespace PotatoFighter
             aoe.m_useAttackSettings = false;
             aoe.m_damage = new HitData.DamageTypes { m_frost = IceBurstFrost };
             aoe.m_damagePerLevel = new HitData.DamageTypes { m_frost = IceBurstFrostPerLevel };
-            aoe.m_radius = IceBurstRadius;
             aoe.m_hitEnemy = true; aoe.m_hitFriendly = false; aoe.m_hitOwner = false; aoe.m_hitSame = false; aoe.m_hitParent = false;
             aoe.m_hitCharacters = true; aoe.m_hitProps = false; aoe.m_hitTerrain = false;
             aoe.m_hitInterval = 0f; aoe.m_ttl = 0.5f; aoe.m_activationDelay = 0f;
@@ -208,14 +210,44 @@ namespace PotatoFighter
             var burst = PrefabManager.Cache.GetPrefab<GameObject>(IceBurstEffect);
             aoe.m_initiateEffect = new EffectList();
             aoe.m_hitEffects = new EffectList();
-            if (burst) aoe.m_initiateEffect.m_effectPrefabs = new[] { new EffectList.EffectData { m_prefab = burst, m_enabled = true, m_variant = -1 } };
+            if (burst)
+            {
+                // Our own copy of the ice impact, so it can grow with the reach. Its particles scale with the whole
+                // object (by default each keeps its own size); lights don't scale at all, so their reach is set by hand.
+                iceEffect = PrefabManager.Instance.CreateClonedPrefab(IceBurstName + "_fx", burst);
+                foreach (var ps in iceEffect.GetComponentsInChildren<ParticleSystem>(true))
+                {
+                    var main = ps.main;
+                    main.scalingMode = ParticleSystemScalingMode.Hierarchy;
+                }
+                iceLights = iceEffect.GetComponentsInChildren<Light>(true);
+                iceLightRanges = System.Array.ConvertAll(iceLights, l => l.range);
+                aoe.m_initiateEffect.m_effectPrefabs = new[] { new EffectList.EffectData { m_prefab = iceEffect, m_enabled = true, m_variant = -1 } };
+            }
             else Plugin.Log.LogWarning($"The ice effect {IceBurstEffect} wasn't found; the burst still hits.");
             // Jotunn's empty prefab carries a placeholder cube: nothing should be drawn or collide but the effect.
             foreach (var c in go.GetComponentsInChildren<Collider>(true)) Object.DestroyImmediate(c);
             foreach (var r in go.GetComponentsInChildren<MeshRenderer>(true)) Object.DestroyImmediate(r);
             foreach (var f in go.GetComponentsInChildren<MeshFilter>(true)) Object.DestroyImmediate(f);
             PrefabManager.Instance.AddPrefab(go);
+            iceBurst = go;
+            ApplyIceRadius();
+            Plugin.IceRadius.SettingChanged += (_, __) => ApplyIceRadius();
             return go;
+        }
+
+        // The "Explosion radius" setting (set by the server, so every player's game draws the same size): the reach of the
+        // damage, and the ice effect scaled to match.
+        private static void ApplyIceRadius()
+        {
+            if (!iceBurst) return;
+            float radius = Plugin.IceRadius.Value;
+            var aoe = iceBurst.GetComponent<Aoe>();
+            if (aoe) aoe.m_radius = radius;
+            if (!iceEffect) return;
+            float scale = radius / IceLookRadius;
+            iceEffect.transform.localScale = Vector3.one * scale;
+            for (int i = 0; i < iceLights.Length; i++) if (iceLights[i]) iceLights[i].range = iceLightRanges[i] * scale;
         }
 
         // A spinning pivot at the balance point holding the axe with its blades upright in the flight plane. The pivot turns
@@ -292,9 +324,10 @@ namespace PotatoFighter
                 lastBurst = __instance;
                 lastBurstTime = Time.time;
                 var t = owner.transform;
+                ApplyIceRadius();
                 var go = Object.Instantiate(iceBurst, t.position + t.forward * IceBurstReach + Vector3.up * 0.2f, t.rotation);
                 go.GetComponent<IProjectile>()?.Setup(owner, Vector3.zero, -1f, null, weapon, null);
-                if (Plugin.TestBuild) Plugin.Log.LogInfo($"[Ice] burst at the chop ({Time.frameCount})");
+                if (Plugin.TestBuild) Plugin.Log.LogInfo($"[Ice] burst at the chop ({Time.frameCount}), {Plugin.IceRadius.Value:0.0} m");
             }
         }
 
