@@ -82,54 +82,58 @@ namespace PotatoFighter
             zdo.Set(RolledKey, true);
             if (fresh && now > 1 && zdo.GetInt(ModKey) == 0) Assign(c, RollModifier(c, now - 1));
             if (Diagnostics)
-                Plugin.Log.LogInfo($"[Levels] {Utils.GetPrefabName(c.gameObject)} {(fresh ? "spawned" : "over the cap")}: {Stars(level)} -> {Stars(now)}{(Get(c) != Modifier.None ? ", " + Get(c) : "")} (world level {WorldLevel(c.transform.position)}{(CanHaveStars(c) ? "" : ", no stars in vanilla")})");
+            {
+                Chances(c, out float first, out int most);
+                Plugin.Log.LogInfo($"[Levels] {Utils.GetPrefabName(c.gameObject)} {(fresh ? "spawned" : "over the cap")} in {Heightmap.FindBiome(c.transform.position)}: {Stars(level)} -> {Stars(now)}{(Get(c) != Modifier.None ? ", " + Get(c) : "")} (first star {first:P0}, most {most}{(CanHaveStars(c) ? "" : ", no stars in vanilla")})");
+            }
         }
 
         private static string Stars(int level) => level - 1 == 1 ? "1 star" : $"{level - 1} stars";
 
-        // How far the world has come: the furthest boss defeated (0 Eikthyr ... 6 Fader), -1 for none.
-        private static readonly string[] Bosses = { "defeated_eikthyr", "defeated_gdking", "defeated_bonemass", "defeated_dragon", "defeated_goblinking", "defeated_queen", "defeated_fader" };
+        // Stars by biome (the user's choice, 2026-10-26): each biome has its own first-star chance and most stars, and a
+        // biome whose boss is beaten gets a little more. Each further star comes 30% of the time. Star chance scales only
+        // the first star. Creatures the game never gives stars roll as if two biomes earlier (none in the Meadows or
+        // Black Forest).
+        private static readonly string[] BiomeBoss = { "defeated_eikthyr", "defeated_gdking", "defeated_bonemass", "defeated_dragon", "defeated_goblinking", "defeated_queen", "defeated_fader", "" };
+        private static readonly float[] FirstStar = { 0.06f, 0.10f, 0.14f, 0.18f, 0.22f, 0.26f, 0.26f, 0.26f };
+        private static readonly int[] BiomeMaxStars = { 2, 3, 4, 5, 5, 5, 5, 5 };
+        private const float BossBump = 0.04f, NextStar = 0.3f;
 
-        private static int Progress()
-        {
-            for (int i = Bosses.Length - 1; i >= 0; i--)
-                if ((ZoneSystem.instance && ZoneSystem.instance.GetGlobalKey(Bosses[i])) || (Player.m_localPlayer && Player.m_localPlayer.HaveUniqueKey(Bosses[i]))) return i;
-            return -1;
-        }
-
-        private static int BiomeIndex(Heightmap.Biome biome)
+        // Meadows 0, Black Forest 1, Swamp 2 (and the ocean), Mountain 3, Plains 4, Mistlands 5, Ashlands 6, Deep North 7.
+        private static int Tier(Heightmap.Biome biome)
         {
             switch (biome)
             {
                 case Heightmap.Biome.Meadows: return 0;
                 case Heightmap.Biome.BlackForest: return 1;
-                case Heightmap.Biome.Swamp: return 2;
+                case Heightmap.Biome.Mountain: return 3;
                 case Heightmap.Biome.Plains: return 4;
                 case Heightmap.Biome.Mistlands: return 5;
                 case Heightmap.Biome.AshLands: return 6;
                 case Heightmap.Biome.DeepNorth: return 7;
-                default: return 3;   // Mountain, Ocean
+                default: return 2;   // Swamp, Ocean
             }
         }
 
-        // The biome you're pushing into (the one after the last boss) is world level 1; every biome behind it one more,
-        // up to 6. Biomes further ahead are 1 as well: they're hard enough already.
-        internal static int WorldLevel(Vector3 position)
+        private static bool Beaten(string key) => key.Length > 0 &&
+            ((ZoneSystem.instance && ZoneSystem.instance.GetGlobalKey(key)) || (Player.m_localPlayer && Player.m_localPlayer.HaveUniqueKey(key)));
+
+        // The first-star chance and most stars for a creature here; 0 chance when it gets none.
+        internal static void Chances(Character c, out float first, out int most)
         {
-            int behind = Progress() + 1 - BiomeIndex(Heightmap.FindBiome(position));
-            return Mathf.Clamp(1 + behind, 1, 6);
+            int tier = Tier(Heightmap.FindBiome(c.transform.position));
+            bool beaten = Beaten(BiomeBoss[tier]);
+            if (!CanHaveStars(c)) tier -= 2;
+            if (tier < 0) { first = 0f; most = 0; return; }
+            first = Mathf.Min(0.95f, (FirstStar[tier] + (beaten ? BossBump : 0f)) * Plugin.CreatureStarChance.Value / 100f);
+            most = Mathf.Min(BiomeMaxStars[tier], Plugin.CreatureMaxStars.Value);
         }
 
-        // First star 8% at world level 1, +4% a level; each further star 30% of the time. Creatures the game never gives
-        // stars roll two world levels lower (none until world level 3). Star chance scales both.
         private static int RollStars(Character c)
         {
-            int wl = WorldLevel(c.transform.position) - (CanHaveStars(c) ? 0 : 2);
-            if (wl < 1) return 0;
-            float scale = Plugin.CreatureStarChance.Value / 100f;
-            float first = Mathf.Min(0.95f, (0.08f + 0.04f * (wl - 1)) * scale), next = Mathf.Min(0.95f, 0.3f * scale);
+            Chances(c, out float first, out int most);
             int stars = 0;
-            while (stars < Plugin.CreatureMaxStars.Value && UnityEngine.Random.value < (stars == 0 ? first : next)) stars++;
+            while (stars < most && UnityEngine.Random.value < (stars == 0 ? first : NextStar)) stars++;
             return stars;
         }
 
@@ -222,6 +226,26 @@ namespace PotatoFighter
                 }
                 if (Diagnostics) Plugin.Log.LogInfo($"[Levels] {Utils.GetPrefabName(__instance.gameObject)} split into two with {Stars(level)}");
             }
+        }
+
+        // ------------------------------------------------------------------ loot
+        // The game multiplies a creature's drops (amount and chance) by 2 for each star, 32x at 5 stars; it was made for 2
+        // stars at most. Up to 2 stars it stays the game's (2x, 4x); each star past that adds 1x (5 stars: 7x).
+        [HarmonyPatch(typeof(CharacterDrop), nameof(CharacterDrop.GenerateDropList))]
+        internal static class Loot
+        {
+            private static IEnumerable<CodeInstruction> Transpiler(IEnumerable<CodeInstruction> instructions)
+            {
+                var pow = AccessTools.Method(typeof(Mathf), nameof(Mathf.Pow));
+                var code = new List<CodeInstruction>(instructions);
+                int found = 0;
+                foreach (var instruction in code)
+                    if (instruction.Calls(pow)) { instruction.operand = AccessTools.Method(typeof(Loot), nameof(Factor)); found++; }
+                if (found != 1) throw new InvalidOperationException($"expected one Mathf.Pow in CharacterDrop.GenerateDropList, found {found}");
+                return code;
+            }
+
+            private static float Factor(float two, float stars) => !On || stars <= 2f ? Mathf.Pow(two, stars) : Mathf.Pow(two, 2f) + (stars - 2f);
         }
 
         // ------------------------------------------------------------------ offspring

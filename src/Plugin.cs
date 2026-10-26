@@ -74,11 +74,11 @@ namespace PotatoFighter
             ExplosionSize = Config.Bind(WeaponSection, "Explosion size", 100,
                 new ConfigDescription("The size of every PotatoFighter weapon's explosions, in percent of its own size (the Kraken Axe's ice explosion: 2.9 m at 100). Both the reach of the damage and the effect grow and shrink with it. Set by the server.", new AcceptableValueRange<int>(50, 200), serverSet));
             CreatureLevels = Config.Bind(CreatureSection, "Creature levels", true,
-                new ConfigDescription("Creatures spawn with extra stars, more in biomes behind the world's boss progress, and some with a modifier (Armored, Quick, Fierce, Regenerating, Splitting) that their young can inherit. Creatures loaded from the world keep their level, except wild ones above Creature max stars, which get one new roll. Off by itself when StarLevelSystem or Creature Level and Loot Control is installed. Set by the server.", null, serverSet));
+                new ConfigDescription("Creatures spawn with extra stars, more in later biomes (Meadows up to 2 and rare, Black Forest 3, Swamp 4, Mountain and later 5) and a little more once a biome's boss is beaten, and some with a modifier (Armored, Quick, Fierce, Regenerating, Splitting) that their young can inherit. Creatures loaded from the world keep their level, except wild ones above Creature max stars, which get one new roll. Off by itself when StarLevelSystem or Creature Level and Loot Control is installed. Set by the server.", null, serverSet));
             CreatureMaxStars = Config.Bind(CreatureSection, "Creature max stars", 5,
                 new ConfigDescription("Most stars a creature can spawn with. Set by the server.", new AcceptableValueRange<int>(2, 10), serverSet));
             CreatureStarChance = Config.Bind(CreatureSection, "Creature star chance", 100,
-                new ConfigDescription("How likely extra stars are, in percent of the normal chance (0: only the game's own stars). Set by the server.", new AcceptableValueRange<int>(0, 300), serverSet));
+                new ConfigDescription("How likely a creature is to get its first extra star, in percent of the normal chance (0: only the game's own stars). Each further star stays 30%. Set by the server.", new AcceptableValueRange<int>(0, 300), serverSet));
             CreatureModifierChance = Config.Bind(CreatureSection, "Creature modifier chance", 100,
                 new ConfigDescription("How likely a creature with stars spawns with a modifier, in percent of the normal chance (15% at 1 star to 35% at 5). 0: no modifiers. Set by the server.", new AcceptableValueRange<int>(0, 300), serverSet));
             OffspringModifierChance = Config.Bind(CreatureSection, "Offspring modifier chance", 50,
