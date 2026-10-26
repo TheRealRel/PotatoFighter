@@ -36,6 +36,8 @@ An Ashlands weapon, made at the Black Forge (level 3) from 16 flametal, 10 silve
 
 **Fast bow shots aren't lost.** With a quick draw (high Bows skill, or Epic Loot's Quick Draw), the next arrow is fully drawn before the last shot's animation ends, and the game quietly dropped a release made then. Now the arrow stays drawn and flies as soon as the bow can fire. Blocking, switching weapons or dying before then cancels it without using the arrow. With Epic Loot, a cancelled attack no longer fires a Triple Shot volley.
 
+**Weapon switches don't slow you.** Switching weapons, shields, torches or tools, and sheathing or drawing with R, no longer drops you from a run to a walk while the animation plays. Armor keeps the game's own equip time. Two choices are off by default: a switch made while sprinting can go ahead for a little stamina instead of being cancelled, and an attack can cut a switch short to swing the new weapon at once. The idea comes from Skarif's FastSwap; PotatoFighter's version is its own code, and it steps aside when FastSwap is installed.
+
 If you had Potato Tweaks before, PotatoFighter takes over your attack cancel and bow choices from its settings the first time it starts.
 
 ## Settings
@@ -54,6 +56,10 @@ Under PotatoFighter in Configuration Manager, in two sections. The ones marked s
 | **2 - Combat** | | |
 | Attack cancel (server) | On | Block cancels an attack's windup or recovery. |
 | Keep fast bow shots | On | A fully drawn arrow let go too early waits and flies as soon as the bow can fire. |
+| Fast swap (server) | On | Weapon switches and sheathing with R don't slow you to a walk. |
+| Fast swap while sprinting (server) | Off | A switch made while sprinting goes ahead instead of being cancelled by the sprint, for stamina. |
+| Fast swap stamina while sprinting (server) | 10 | The stamina that costs (0-50). Without that much, the switch doesn't happen. |
+| Attack cuts a swap short (server) | Off | Attacking or drawing a bow during a switch finishes it at once and goes ahead with the new weapon. |
 
 Bug reports go to [GitHub Issues](https://github.com/TheRealRel/PotatoFighter/issues), where the source lives too. Questions are welcome on Discord: [relanebeis](https://discord.com/users/373574370267889674).
 

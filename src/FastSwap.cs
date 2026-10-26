@@ -38,7 +38,7 @@ namespace PotatoFighter
         private const float SettledSeconds = 0.25f;    // no slowdown for this long after it began: the switch is over
 
         // Test builds only (removed for the release): one log line per switch, how long it slowed and how much we lifted.
-        internal const bool Diagnostics = true;
+        internal const bool Diagnostics = false;
         private static int slowFrames, liftedFrames;
         // Test builds: a slowdown the switch didn't cover, logged once it ends, with the animation clip(s) on the layer the
         // game reads (layer 1, the upper body) so it's clear what slowed and how long after the last switch.

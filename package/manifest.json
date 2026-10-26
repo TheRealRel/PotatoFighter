@@ -2,7 +2,7 @@
     "name": "PotatoFighter",
     "version_number": "1.0.0",
     "website_url": "https://github.com/TheRealRel/PotatoFighter",
-    "description": "The Kraken Axe, a frost axe you throw and call back to your hand, plus attack cancel and the fast bow shot fix (moved from Potato Tweaks).",
+    "description": "The Kraken Axe, a frost axe you throw and call back to your hand, plus weapon switches that don't slow you, attack cancel and the fast bow shot fix (moved from Potato Tweaks).",
     "dependencies": [
         "denikson-BepInExPack_Valheim-5.4.2351",
         "ValheimModding-Jotunn-2.30.2"
