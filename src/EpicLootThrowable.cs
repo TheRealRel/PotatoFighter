@@ -55,12 +55,14 @@ namespace PotatoFighter
             private static MethodBase TargetMethod() => AccessTools.Method(AccessTools.TypeByName("EpicLoot.MagicItemEffects.Throwable_Humanoid_StartAttack_Patch"), "Prefix");
             private static bool Prepare() => EpicLoot && TargetMethod() != null;
 
-            // Our prefix on Epic Loot's prefix: __args are its arguments (the humanoid first), __result its return value
-            // (true lets the game's StartAttack run).
-            private static bool Prefix(object[] __args, ref bool __result)
+            // Our prefix on Epic Loot's prefix bool Prefix(Humanoid __instance, ref bool __result, bool secondaryAttack):
+            // __0 is its humanoid and our __result is its return value (true lets the game's StartAttack run). Its
+            // arguments are taken by position, not as __args: Harmony can't box its ref bool into an object array
+            // ("Invalid IL code ... box", which switched this fix off).
+            private static bool Prefix(Humanoid __0, ref bool __result)
             {
-                if (__args == null || __args.Length == 0 || !(__args[0] is Humanoid humanoid)) return true;
-                var weapon = humanoid.GetCurrentWeapon();
+                if (__0 == null) return true;
+                var weapon = __0.GetCurrentWeapon();
                 if (weapon?.m_shared == null || !ThrowingWeapons.Contains(weapon.m_shared.m_name)) return true;
                 __result = true;
                 return false;

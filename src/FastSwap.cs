@@ -40,6 +40,35 @@ namespace PotatoFighter
         // Test builds only (removed for the release): one log line per switch, how long it slowed and how much we lifted.
         internal const bool Diagnostics = true;
         private static int slowFrames, liftedFrames;
+        // Test builds: a slowdown the switch didn't cover, logged once it ends, with the animation clip(s) on the layer the
+        // game reads (layer 1, the upper body) so it's clear what slowed and how long after the last switch.
+        private static float swapEnded = -1f, outsideStarted = -1f;
+        private static int outsideFrames;
+        private static string outsideClips;
+
+        private static void OutsideSlowdown(Player player)
+        {
+            if (outsideFrames++ > 0) return;
+            outsideStarted = Time.time;
+            outsideClips = Clips(player);
+        }
+
+        private static void EndOutsideSlowdown()
+        {
+            if (outsideFrames == 0) return;
+            string after = swapEnded < 0f ? "no switch yet" : $"{outsideStarted - swapEnded:0.00} s after the last switch ended";
+            Plugin.Log.LogInfo($"[Swap] slowed outside a switch for {Time.time - outsideStarted:0.00} s ({outsideFrames} frames), {after}; layer 1: {outsideClips}");
+            outsideFrames = 0;
+        }
+
+        private static string Clips(Player player)
+        {
+            var animator = player.GetComponentInChildren<UnityEngine.Animator>();
+            if (!animator) return "no animator";
+            string Names(UnityEngine.AnimatorClipInfo[] infos) => infos == null || infos.Length == 0 ? "-" : string.Join("+", System.Array.ConvertAll(infos, i => i.clip ? i.clip.name : "?"));
+            string now = Names(animator.GetCurrentAnimatorClipInfo(1));
+            return animator.IsInTransition(1) ? $"{now} -> {Names(animator.GetNextAnimatorClipInfo(1))}" : now;
+        }
 
         private static void StartSwap()
         {
@@ -113,11 +142,13 @@ namespace PotatoFighter
                     else if (sawSlowdown ? Time.time - lastSlowdown > SettledSeconds : Time.time - swapStarted > 0.5f)
                     {
                         swapActive = false;
+                        swapEnded = Time.time;
                         if (Diagnostics) Plugin.Log.LogInfo($"[Swap] over after {Time.time - swapStarted:0.00} s: the game slowed {slowFrames} frames, fast swap lifted {liftedFrames}");
                     }
                 }
                 if (__result && On(__instance) && Swapping(__instance)) { __result = false; liftedFrames++; }
-                else if (__result && Diagnostics && Time.frameCount % 30 == 0) Plugin.Log.LogInfo($"[Swap] slowed, not lifted: queue {Queue(__instance)?.Count ?? -1}, swap {(swapActive ? "on" : "off")}");
+                else if (__result && Diagnostics) OutsideSlowdown(__instance);
+                if (Diagnostics && !__result) EndOutsideSlowdown();
             }
         }
 
