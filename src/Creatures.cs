@@ -230,7 +230,9 @@ namespace PotatoFighter
 
         // ------------------------------------------------------------------ loot
         // The game multiplies a creature's drops (amount and chance) by 2 for each star, 32x at 5 stars; it was made for 2
-        // stars at most. Up to 2 stars it stays the game's (2x, 4x); each star past that adds 1x (5 stars: 7x).
+        // stars at most, and Potato Tweaks' Creature drops multiplies on top. Each star adds half instead (the user's
+        // choice, 2026-10-26): 1.5x at 1 star, 2x at 2, 3.5x at 5. The game takes a whole number, so a half is a coin flip
+        // per creature (1 star: 1x or 2x).
         [HarmonyPatch(typeof(CharacterDrop), nameof(CharacterDrop.GenerateDropList))]
         internal static class Loot
         {
@@ -245,7 +247,13 @@ namespace PotatoFighter
                 return code;
             }
 
-            private static float Factor(float two, float stars) => !On || stars <= 2f ? Mathf.Pow(two, stars) : Mathf.Pow(two, 2f) + (stars - 2f);
+            private static float Factor(float two, float stars)
+            {
+                if (!On) return Mathf.Pow(two, stars);
+                float factor = 1f + 0.5f * stars;
+                float whole = Mathf.Floor(factor);
+                return whole + (UnityEngine.Random.value < factor - whole ? 1f : 0f);
+            }
         }
 
         // ------------------------------------------------------------------ offspring
