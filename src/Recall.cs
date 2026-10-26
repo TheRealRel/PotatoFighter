@@ -1,5 +1,7 @@
 // Weapon recall: a thrown weapon (the game's spears, and modded javelins and throwing axes, which all use the same
-// "drop the item where the projectile lands" path) can be called back to the hotbar slot it came from with one key.
+// "drop the item where the projectile lands" path) can be called back to the hotbar slot it came from with the throw
+// button (middle mouse), while the hand it was thrown from is empty. Release builds only do this for PotatoFighter's
+// own returning weapons (Plugin.OwnWeapons); test builds for every thrown weapon.
 // Each throw is followed from the projectile to the item it drops; the drop's network id is kept (also in the
 // character's save), so a weapon left behind can be recalled after a relog or a trip away, once you're near it again.
 using System;
@@ -17,8 +19,11 @@ namespace PotatoFighter
         private const float GiveUpAfter = 5f;       // seconds to wait for another player's game to hand a weapon over
         private const float CheckGoneWithin = 40f;  // a weapon this close that no longer exists was picked up or destroyed
 
+        private enum Hand { Right, Left, Both }
+
         private sealed class Thrown
         {
+            public Hand Hand;
             public string Name;
             public string Prefab;
             public Vector2i Slot;
@@ -53,7 +58,6 @@ namespace PotatoFighter
             try
             {
                 if (loadedFor != player) Load(player);
-                if (Plugin.RecallEnabled.Value && Plugin.RecallKey.Value.IsDown() && CanTakeInput() && !player.IsDead()) CallAll(player);
                 Tick(player);
             }
             catch (Exception e)
@@ -63,9 +67,41 @@ namespace PotatoFighter
             }
         }
 
-        private static bool CanTakeInput() =>
-            !(Chat.instance && Chat.instance.HasFocus()) && !global::Console.IsVisible() && !TextInput.IsVisible() && !Menu.IsVisible() &&
-            !InventoryGui.IsVisible() && !Minimap.IsOpen() && !StoreGui.IsVisible();
+        private static readonly AccessTools.FieldRef<Humanoid, ItemDrop.ItemData> HiddenRight = AccessTools.FieldRefAccess<Humanoid, ItemDrop.ItemData>("m_hiddenRightItem");
+        private static readonly AccessTools.FieldRef<Humanoid, ItemDrop.ItemData> HiddenLeft = AccessTools.FieldRefAccess<Humanoid, ItemDrop.ItemData>("m_hiddenLeftItem");
+
+        internal static bool Recallable(ItemDrop.ItemData item) =>
+            Plugin.TestBuild || (item?.m_dropPrefab && Plugin.OwnWeapons.Contains(item.m_dropPrefab.name));
+
+        // The hand(s) a weapon is held in, as Humanoid.EquipItem places it: bows and shields left, two-handed weapons both.
+        private static Hand HandOf(ItemDrop.ItemData.ItemType type)
+        {
+            switch (type)
+            {
+                case ItemDrop.ItemData.ItemType.Bow:
+                case ItemDrop.ItemData.ItemType.Shield: return Hand.Left;
+                case ItemDrop.ItemData.ItemType.TwoHandedWeapon:
+                case ItemDrop.ItemData.ItemType.TwoHandedWeaponLeft: return Hand.Both;
+                default: return Hand.Right;
+            }
+        }
+
+        private static Hand HandOf(string prefab)
+        {
+            var go = string.IsNullOrEmpty(prefab) || !ObjectDB.instance ? null : ObjectDB.instance.GetItemPrefab(prefab);
+            var drop = go ? go.GetComponent<ItemDrop>() : null;
+            return drop?.m_itemData?.m_shared != null ? HandOf(drop.m_itemData.m_shared.m_itemType) : Hand.Right;
+        }
+
+        // A hand holding nothing, sheathed weapons included (pressing the throw button then just draws them as usual).
+        private static bool HandEmpty(Player player, Hand hand)
+        {
+            bool right = player.RightItem == null && HiddenRight(player) == null;
+            bool left = player.LeftItem == null && HiddenLeft(player) == null;
+            return hand == Hand.Right ? right : hand == Hand.Left ? left : right && left;
+        }
+
+        private static bool CanCall(Player player, Thrown t) => !t.Called && HandEmpty(player, t.Hand);
 
         private static void CallAll(Player player)
         {
@@ -73,7 +109,7 @@ namespace PotatoFighter
             float cost = Plugin.RecallStamina.Value;
             foreach (var t in thrown)
             {
-                if (t.Called) continue;
+                if (!CanCall(player, t)) continue;
                 if (cost > 0f && !player.HaveStamina(cost))
                 {
                     if (called == 0) Hud.instance?.StaminaBarEmptyFlash();
@@ -155,7 +191,7 @@ namespace PotatoFighter
                 return false;
             }
             var held = inventory.GetAllItems().FirstOrDefault(x => x == item) ?? inventory.GetItemAt(t.Slot.x, t.Slot.y);
-            if (held != null && held.IsWeapon() && player.GetCurrentWeapon() == player.m_unarmedWeapon?.m_itemData)
+            if (held != null && held.IsWeapon() && HandEmpty(player, t.Hand))
                 player.EquipItem(held);
             player.m_pickupEffects.Create(player.transform.position, Quaternion.identity);
             waitForRelease = true;
@@ -263,7 +299,8 @@ namespace PotatoFighter
                     !int.TryParse(f[2], NumberStyles.Integer, inv, out int x) || !int.TryParse(f[3], NumberStyles.Integer, inv, out int y) ||
                     !float.TryParse(f[4], NumberStyles.Float, inv, out float px) || !float.TryParse(f[5], NumberStyles.Float, inv, out float py) ||
                     !float.TryParse(f[6], NumberStyles.Float, inv, out float pz)) continue;
-                thrown.Add(new Thrown { Drop = new ZDOID(user, id), Slot = new Vector2i(x, y), Where = new Vector3(px, py, pz), Name = f[7], Prefab = f.Length > 8 ? f[8] : null });
+                string prefab = f.Length > 8 ? f[8] : null;
+                thrown.Add(new Thrown { Drop = new ZDOID(user, id), Slot = new Vector2i(x, y), Where = new Vector3(px, py, pz), Name = f[7], Prefab = prefab, Hand = HandOf(prefab) });
             }
         }
 
@@ -273,8 +310,8 @@ namespace PotatoFighter
         {
             private static void Postfix(Projectile __instance, Character owner, ItemDrop.ItemData item)
             {
-                if (!Plugin.RecallEnabled.Value || item?.m_shared == null || !__instance.m_respawnItemOnHit || owner == null || owner != Player.m_localPlayer) return;
-                thrown.Add(new Thrown { Name = item.m_shared.m_name, Prefab = item.m_dropPrefab ? item.m_dropPrefab.name : null, Slot = item.m_gridPos, Flying = __instance, FlyingItem = item, Where = owner.transform.position });
+                if (!Plugin.RecallEnabled.Value || item?.m_shared == null || !__instance.m_respawnItemOnHit || owner == null || owner != Player.m_localPlayer || !Recallable(item)) return;
+                thrown.Add(new Thrown { Hand = HandOf(item.m_shared.m_itemType), Name = item.m_shared.m_name, Prefab = item.m_dropPrefab ? item.m_dropPrefab.name : null, Slot = item.m_gridPos, Flying = __instance, FlyingItem = item, Where = owner.transform.position });
             }
         }
 
@@ -303,8 +340,8 @@ namespace PotatoFighter
             }
         }
 
-        // The throw button with empty hands calls thrown weapons back instead of attacking. Holding a weapon that has its
-        // own throw or other secondary attack (a second spear) keeps that attack.
+        // The throw button calls back every thrown weapon whose hand is empty, instead of attacking. With nothing to call
+        // back (a second spear in that hand, or a weapon already on its way), the button does what it always does.
         [HarmonyPatch(typeof(Player), nameof(Player.SetControls))]
         private static class ThrowButton
         {
@@ -320,11 +357,8 @@ namespace PotatoFighter
                         return;
                     }
                 }
-                if (!secondaryAttack || __instance != Player.m_localPlayer || !Plugin.RecallEnabled.Value || !Plugin.RecallWithThrow.Value) return;
-                if (!thrown.Any(t => !t.Called) || __instance.IsDead()) return;
-                var weapon = __instance.GetCurrentWeapon();
-                bool emptyHands = weapon == null || weapon == __instance.m_unarmedWeapon?.m_itemData;
-                if (!emptyHands && weapon.HaveSecondaryAttack()) return;
+                if (!secondaryAttack || __instance != Player.m_localPlayer || !Plugin.RecallEnabled.Value || __instance.IsDead()) return;
+                if (!thrown.Any(t => CanCall(__instance, t))) return;
                 CallAll(__instance);
                 waitForRelease = true;
                 secondaryAttack = false;

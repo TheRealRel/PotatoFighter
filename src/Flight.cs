@@ -1,5 +1,5 @@
 // Test-build logging: how each of this player's throws is launched and how it flies, to tune PotatoFighter's own
-// weapons (a spear's arch, a magical axe's straighter flight). Off in releases (Diagnostics = false).
+// weapons (a spear's arch, a magical axe's straighter flight). Test builds only: in releases the patches aren't applied.
 using System.Collections.Generic;
 using System.Globalization;
 using HarmonyLib;
@@ -9,7 +9,7 @@ namespace PotatoFighter
 {
     internal static class Flight
     {
-        internal const bool Diagnostics = true;
+        internal const bool Diagnostics = Plugin.TestBuild;
 
         private sealed class Track { public Vector3 Start; public float Time; public string Name; public float Peak; }
         private static readonly Dictionary<Projectile, Track> tracks = new Dictionary<Projectile, Track>();
@@ -21,6 +21,7 @@ namespace PotatoFighter
         [HarmonyPatch(typeof(Projectile), nameof(Projectile.Setup))]
         private static class Launched
         {
+            private static bool Prepare() => Diagnostics;
             private static void Postfix(Projectile __instance, Character owner, ItemDrop.ItemData item, Vector3 velocity)
             {
                 if (!Diagnostics || owner == null || owner != Player.m_localPlayer || item?.m_shared == null) return;
@@ -41,6 +42,7 @@ namespace PotatoFighter
         [HarmonyPatch(typeof(Projectile), "FixedUpdate")]
         private static class Flying
         {
+            private static bool Prepare() => Diagnostics;
             private static void Postfix(Projectile __instance)
             {
                 if (Diagnostics && tracks.TryGetValue(__instance, out var t) && __instance.transform.position.y > t.Peak) t.Peak = __instance.transform.position.y;
@@ -50,6 +52,7 @@ namespace PotatoFighter
         [HarmonyPatch(typeof(Projectile), "OnHit")]
         private static class Landed
         {
+            private static bool Prepare() => Diagnostics;
             private static void Prefix(Projectile __instance)
             {
                 if (!Diagnostics || !tracks.TryGetValue(__instance, out var t)) return;
