@@ -24,6 +24,7 @@ namespace PotatoFighter
         private sealed class Thrown
         {
             public Hand Hand;
+            public Skills.SkillType Skill = Skills.SkillType.Spears;
             public string Name;
             public string Prefab;
             public Vector2i Slot;
@@ -93,6 +94,13 @@ namespace PotatoFighter
             }
         }
 
+        private static Skills.SkillType SkillOf(string prefab)
+        {
+            var go = string.IsNullOrEmpty(prefab) || !ObjectDB.instance ? null : ObjectDB.instance.GetItemPrefab(prefab);
+            var drop = go ? go.GetComponent<ItemDrop>() : null;
+            return drop?.m_itemData?.m_shared != null ? drop.m_itemData.m_shared.m_skillType : Skills.SkillType.Spears;
+        }
+
         private static Hand HandOf(string prefab)
         {
             var go = string.IsNullOrEmpty(prefab) || !ObjectDB.instance ? null : ObjectDB.instance.GetItemPrefab(prefab);
@@ -121,10 +129,10 @@ namespace PotatoFighter
         private static void CallAll(Player player)
         {
             int called = 0;
-            float cost = Plugin.RecallStamina.Value;
             foreach (var t in thrown)
             {
                 if (!CanCall(player, t)) continue;
+                float cost = Plugin.RecallStamina.Value ? Plugin.RecallStaminaCost * (1f - Mathf.Clamp01(player.GetSkillLevel(t.Skill) / 100f)) : 0f;
                 if (cost > 0f && !player.HaveStamina(cost))
                 {
                     if (called == 0) Hud.instance?.StaminaBarEmptyFlash();
@@ -494,7 +502,7 @@ namespace PotatoFighter
                     !float.TryParse(f[4], NumberStyles.Float, inv, out float px) || !float.TryParse(f[5], NumberStyles.Float, inv, out float py) ||
                     !float.TryParse(f[6], NumberStyles.Float, inv, out float pz)) continue;
                 string prefab = f.Length > 8 ? f[8] : null;
-                thrown.Add(new Thrown { Drop = new ZDOID(user, id), Slot = new Vector2i(x, y), Where = new Vector3(px, py, pz), Name = f[7], Prefab = prefab, Hand = HandOf(prefab) });
+                thrown.Add(new Thrown { Drop = new ZDOID(user, id), Slot = new Vector2i(x, y), Where = new Vector3(px, py, pz), Name = f[7], Prefab = prefab, Hand = HandOf(prefab), Skill = SkillOf(prefab) });
             }
         }
 
@@ -505,7 +513,7 @@ namespace PotatoFighter
             private static void Postfix(Projectile __instance, Character owner, ItemDrop.ItemData item)
             {
                 if (!Plugin.RecallEnabled.Value || item?.m_shared == null || !__instance.m_respawnItemOnHit || owner == null || owner != Player.m_localPlayer || !Recallable(item)) return;
-                thrown.Add(new Thrown { Hand = HandOf(item.m_shared.m_itemType), Name = item.m_shared.m_name, Prefab = item.m_dropPrefab ? item.m_dropPrefab.name : null, Slot = item.m_gridPos, Flying = __instance, FlyingItem = item, Where = owner.transform.position, ThrownAt = Time.time });
+                thrown.Add(new Thrown { Hand = HandOf(item.m_shared.m_itemType), Skill = item.m_shared.m_skillType, Name = item.m_shared.m_name, Prefab = item.m_dropPrefab ? item.m_dropPrefab.name : null, Slot = item.m_gridPos, Flying = __instance, FlyingItem = item, Where = owner.transform.position, ThrownAt = Time.time });
             }
         }
 

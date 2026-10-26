@@ -19,7 +19,8 @@ namespace PotatoFighter
         internal const string PrefabName = "potato_kraken_axe";              // never rename: worlds save items by it
         internal const string ProjectileName = "potato_kraken_axe_projectile";
         internal const string IceBurstName = "potato_kraken_iceburst";
-        private const float IceBurstRadius = 3.5f, IceBurstFrost = 40f, IceBurstFrostPerLevel = 6f, IceBurstReach = 1.8f;
+        private const string IceBurstEffect = "fx_DvergerMage_Ice_hit"; // a single, sharp ice impact with a flash of light
+        private const float IceBurstRadius = 2.5f, IceBurstFrost = 60f, IceBurstFrostPerLevel = 8f, IceBurstReach = 1.8f;
         private const string Model = "kraken_axe";
         private const float BalanceZ = 0.45f;     // the balance point along the haft (heavy head), metres from the hand
         private const float SpinPerSecond = 792f;  // degrees a second, end over end: 2 turns, 12 deg a frame at 60 fps (no strobing at 30)
@@ -28,7 +29,7 @@ namespace PotatoFighter
         private const float LightIntensity = 0.6f, LightRange = 3f;
         internal const float MaxFlightSeconds = 1.7f; // about 55 m: past that without a hit, it turns round by itself
         internal const float ThrowSpeed = 32f;      // m/s leaving the hand (the spear: 20)
-        private const float ThrowAnimSpeed = 1.35f; // the spear's throw animation played faster: a snappier arm, earlier release
+        private const float ThrowAnimSpeed = 1.49f; // the spear's throw animation played faster: a snappier arm, earlier release
         private const float ChopAnimSpeed = 1.3f;   // the axe's overhead chop (Shift + middle mouse), quicker
 
         private static Mesh mesh;
@@ -186,26 +187,33 @@ namespace PotatoFighter
             return go;
         }
 
-        // The chop's ice explosion: the game's frost nova (an Aoe) with its own ice burst as the start effect. Frost damage
-        // only (its slow comes with the frost), enemies only, once, on the ground where the chop lands; stronger with the
-        // axe's level. Made by the attacking player's game and synced like a projectile.
+        // The chop's ice explosion: one hit of frost damage (its slow comes with the frost) to enemies within reach, and one
+        // ice impact effect, both the moment the chop lands. A plain Aoe made here (the frost nova it started from plays
+        // three timed waves, so its look trailed the damage and repeated). Made by the attacking player's game and synced.
         private static GameObject MakeIceBurst()
         {
-            var go = PrefabManager.Instance.CreateClonedPrefab(IceBurstName, "FenringIceNova_aoe");
-            var aoe = go.GetComponent<Aoe>();
+            var go = PrefabManager.Instance.CreateEmptyPrefab(IceBurstName, true);
+            var aoe = go.AddComponent<Aoe>();
+            aoe.m_name = "$item_potato_kraken_axe";
             aoe.m_useAttackSettings = false;
             aoe.m_damage = new HitData.DamageTypes { m_frost = IceBurstFrost };
             aoe.m_damagePerLevel = new HitData.DamageTypes { m_frost = IceBurstFrostPerLevel };
             aoe.m_radius = IceBurstRadius;
-            aoe.m_hitEnemy = true; aoe.m_hitFriendly = false; aoe.m_hitOwner = false; aoe.m_hitSame = false;
-            aoe.m_hitProps = false; aoe.m_hitTerrain = false;
-            aoe.m_hitInterval = 0f; aoe.m_placeOnGround = true;
-            // The frost nova spawns extra copies of itself around the first (multi-spawn) and can chain: one burst only.
+            aoe.m_hitEnemy = true; aoe.m_hitFriendly = false; aoe.m_hitOwner = false; aoe.m_hitSame = false; aoe.m_hitParent = false;
+            aoe.m_hitCharacters = true; aoe.m_hitProps = false; aoe.m_hitTerrain = false;
+            aoe.m_hitInterval = 0f; aoe.m_ttl = 0.5f; aoe.m_activationDelay = 0f;
             aoe.m_multiSpawnMin = 0; aoe.m_multiSpawnMax = 0; aoe.m_chainStartChance = 0f;
             aoe.m_skill = Skills.SkillType.Axes;
-            var burst = PrefabManager.Cache.GetPrefab<GameObject>("fx_fenring_icenova");
-            if (burst) aoe.m_initiateEffect = new EffectList { m_effectPrefabs = new[] { new EffectList.EffectData { m_prefab = burst, m_enabled = true, m_variant = -1 } } };
-            else Plugin.Log.LogWarning("The ice burst effect fx_fenring_icenova wasn't found; the burst still hits.");
+            aoe.m_attackForce = 10f;
+            var burst = PrefabManager.Cache.GetPrefab<GameObject>(IceBurstEffect);
+            aoe.m_initiateEffect = new EffectList();
+            aoe.m_hitEffects = new EffectList();
+            if (burst) aoe.m_initiateEffect.m_effectPrefabs = new[] { new EffectList.EffectData { m_prefab = burst, m_enabled = true, m_variant = -1 } };
+            else Plugin.Log.LogWarning($"The ice effect {IceBurstEffect} wasn't found; the burst still hits.");
+            // Jotunn's empty prefab carries a placeholder cube: nothing should be drawn or collide but the effect.
+            foreach (var c in go.GetComponentsInChildren<Collider>(true)) Object.DestroyImmediate(c);
+            foreach (var r in go.GetComponentsInChildren<MeshRenderer>(true)) Object.DestroyImmediate(r);
+            foreach (var f in go.GetComponentsInChildren<MeshFilter>(true)) Object.DestroyImmediate(f);
             PrefabManager.Instance.AddPrefab(go);
             return go;
         }
@@ -286,6 +294,7 @@ namespace PotatoFighter
                 var t = owner.transform;
                 var go = Object.Instantiate(iceBurst, t.position + t.forward * IceBurstReach + Vector3.up * 0.2f, t.rotation);
                 go.GetComponent<IProjectile>()?.Setup(owner, Vector3.zero, -1f, null, weapon, null);
+                if (Plugin.TestBuild) Plugin.Log.LogInfo($"[Ice] burst at the chop ({Time.frameCount})");
             }
         }
 

@@ -34,7 +34,8 @@ namespace PotatoFighter
         internal static ManualLogSource Log;
         internal static ConfigEntry<bool> RecallEnabled, RecallPin, Beam, AttackCancelEnabled, KeepFastShots;
         internal static ConfigEntry<Color> BeamColor;
-        internal static ConfigEntry<float> RecallStamina;
+        internal static ConfigEntry<bool> RecallStamina;
+        internal const float RecallStaminaCost = 15f;   // at skill 0; less with skill, free at 100
 
         private void Awake()
         {
@@ -42,8 +43,8 @@ namespace PotatoFighter
             var serverSet = new ConfigurationManagerAttributes { IsAdminOnly = true };
             RecallEnabled = Config.Bind(RecallSection, "Enabled", true,
                 new ConfigDescription("After a throw, the throw button (middle mouse, or the gamepad's) calls a thrown weapon back to the hotbar slot it came from, while the hand it was thrown from is empty. Set by the server.", null, serverSet));
-            RecallStamina = Config.Bind(RecallSection, "Stamina cost", 15f,
-                new ConfigDescription("Stamina used for each weapon called back. 0 = free. Set by the server.", new AcceptableValueRange<float>(0f, 100f), serverSet));
+            RecallStamina = Config.Bind(RecallSection, "Uses stamina", true,
+                new ConfigDescription("Calling a weapon back costs stamina: 15 at skill 0 in the weapon's own skill (Axes for an axe), less as the skill grows, nothing at 100. Off: free. Set by the server.", null, serverSet));
             RecallPin = Config.Bind(RecallSection, "Map pin", true, "Mark a thrown weapon on the map until it's back in your hands.");
             Beam = Config.Bind(BeamSection, "Light beam", true, "Show a beam of light over a thrown weapon lying on the ground.");
             BeamColor = Config.Bind(BeamSection, "Color", new Color(1f, 0.85f, 0.45f, 0.85f),
