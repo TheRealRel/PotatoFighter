@@ -13,7 +13,8 @@ using UnityEngine;
 
 namespace PotatoFighter
 {
-    [HarmonyPatch(typeof(ObjectDB), "Awake")]
+    // Runs when the local player spawns: at ObjectDB.Awake (main menu) the game's own items aren't registered yet.
+    [HarmonyPatch(typeof(Player), nameof(Player.OnSpawned))]
     internal static class Probe
     {
         private static bool done;
@@ -29,21 +30,23 @@ namespace PotatoFighter
         private static string V(Vector3 v) => $"({F(v.x)},{F(v.y)},{F(v.z)})";
         private static string C(Color c) => $"({F(c.r)},{F(c.g)},{F(c.b)},{F(c.a)})";
 
-        private static void Postfix(ObjectDB __instance)
+        private static void Postfix(Player __instance)
         {
-            if (done || __instance.m_items == null || __instance.m_items.Count == 0) return;
+            var db = ObjectDB.instance;
+            if (done || __instance != Player.m_localPlayer || !db || !db.GetItemPrefab("AxeStone")) return;
             done = true;
+            var __db = db;
             var sb = new StringBuilder();
             try
             {
                 foreach (var name in Items)
                 {
-                    var go = __instance.GetItemPrefab(name);
+                    var go = __db.GetItemPrefab(name);
                     if (!go) { sb.AppendLine($"## {name}: not found"); continue; }
                     DumpItem(sb, go);
                 }
                 // Which items carry the upgrade glow, and how it's set (names only).
-                var scaled = __instance.m_items.Where(i => i && i.GetComponentInChildren<ParticleIntensityScaler>(true)).Select(i => i.name).ToList();
+                var scaled = __db.m_items.Where(i => i && i.GetComponentInChildren<ParticleIntensityScaler>(true)).Select(i => i.name).ToList();
                 sb.AppendLine($"## Items with ParticleIntensityScaler: {scaled.Count}: {string.Join(", ", scaled)}");
             }
             catch (Exception e) { sb.AppendLine("PROBE ERROR " + e); }
