@@ -17,6 +17,8 @@ namespace PotatoFighter
     // load it too, and server settings sync to players.
     [BepInPlugin(Id, "PotatoFighter", Version)]
     [BepInDependency(Jotunn.Main.ModGuid)]
+    // Optional: when Epic Loot is installed it loads first, so its Triple Shot and Throwable code can be found by name.
+    [BepInDependency("randyknapp.mods.epicloot", BepInDependency.DependencyFlags.SoftDependency)]
     [NetworkCompatibility(CompatibilityLevel.EveryoneMustHaveMod, VersionStrictness.Minor)]
     public class Plugin : BaseUnityPlugin
     {
@@ -70,9 +72,11 @@ namespace PotatoFighter
 
             harmony = new Harmony(Id);
             var nested = typeof(Recall).GetNestedTypes(AccessTools.all).Concat(typeof(Flight).GetNestedTypes(AccessTools.all))
-                .Concat(typeof(AttackCancel).GetNestedTypes(AccessTools.all)).Concat(typeof(FastSwap).GetNestedTypes(AccessTools.all)).Concat(typeof(KrakenAxe).GetNestedTypes(AccessTools.all));
+                .Concat(typeof(AttackCancel).GetNestedTypes(AccessTools.all)).Concat(typeof(FastSwap).GetNestedTypes(AccessTools.all)).Concat(typeof(EpicLootThrowable).GetNestedTypes(AccessTools.all)).Concat(typeof(KrakenAxe).GetNestedTypes(AccessTools.all));
             foreach (var type in nested) Patch(type);
             foreach (var type in new[] { typeof(Probe), typeof(BowRelease), typeof(QueuedBowRelease), typeof(TripleShotCancel) }) Patch(type);
+            // Epic Loot may have set its effect list up before this patch was in place.
+            try { EpicLootThrowable.NoThrowableRoll.Exclude(); } catch (Exception e) { Log.LogWarning($"Couldn't keep Throwable off the Kraken Axe: {e.Message}"); }
             gameObject.AddComponent<Recall>();
             Assets.Dir = Path.Combine(Path.GetDirectoryName(Info.Location), "assets");
             KrakenAxe.Register();

@@ -34,7 +34,8 @@ namespace PotatoFighter
         // slows walking, plays on well after that. So a switch counts from when it's queued until the animator has entered
         // and left the slowing state (or SwapCap seconds, whichever is first). Sheathing with R starts the same way.
         private static bool swapActive, sawSlowdown;
-        private static float swapStarted = -1f, interruptUntil = -1f;
+        private static float swapStarted = -1f, lastSlowdown = -1f, interruptUntil = -1f;
+        private const float SettledSeconds = 0.25f;    // no slowdown for this long after it began: the switch is over
 
         // Test builds only (removed for the release): one log line per switch, how long it slowed and how much we lifted.
         internal const bool Diagnostics = true;
@@ -106,8 +107,10 @@ namespace PotatoFighter
                 if (swapActive)
                 {
                     // Over once the animator has been in the slowing state and left it (or never entered it in half a second).
-                    if (__result) { sawSlowdown = true; slowFrames++; }
-                    else if (sawSlowdown || Time.time - swapStarted > 0.5f)
+                    // The equip animation can leave the slowing state for a moment between its parts, so the switch is
+                    // only over once the slowdown has stayed away for SettledSeconds.
+                    if (__result) { sawSlowdown = true; slowFrames++; lastSlowdown = Time.time; }
+                    else if (sawSlowdown ? Time.time - lastSlowdown > SettledSeconds : Time.time - swapStarted > 0.5f)
                     {
                         swapActive = false;
                         if (Diagnostics) Plugin.Log.LogInfo($"[Swap] over after {Time.time - swapStarted:0.00} s: the game slowed {slowFrames} frames, fast swap lifted {liftedFrames}");
