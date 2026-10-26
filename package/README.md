@@ -4,6 +4,8 @@ Weapons and combat fixes for Valheim. The first weapon is the Kraken Axe, a fros
 
 **The Kraken Axe is a one-handed frost axe that always comes back.** It swings with the game's own axe attacks and fells trees. Middle mouse throws it in a straight, spinning line, and it hits whatever it meets. With your hand empty, press middle mouse again and it turns in the air, or lifts off the ground, and flies back to your hand, hitting enemies on the way. If it flies about 55 metres without hitting anything, it turns round by itself.
 
+![Throwing the Kraken Axe out over the sea and catching it on the way back](https://raw.githubusercontent.com/TheRealRel/PotatoFighter/main/docs/images/catch.gif)
+
 ![Fighting Greydwarves with the Kraken Axe](https://raw.githubusercontent.com/TheRealRel/PotatoFighter/main/docs/images/fight.gif)
 
 **Shift and middle mouse is the overhead chop.** Where it lands, the ice bursts: one blast of frost reaching about three metres around it, which slows what it hits. The chop is cheaper than usual as your Axes skill grows, down to half its stamina at 100.
