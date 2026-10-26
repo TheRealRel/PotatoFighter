@@ -239,7 +239,7 @@ namespace PotatoFighter
         // least a third of a second), then the item goes into its slot. Only drawn on this player's screen.
         private sealed class ReturnFlight : MonoBehaviour
         {
-            private const float Speed = 25f, MinTime = 0.35f, MaxTime = 1.2f, Spin = 720f; // same tumble as the throw
+            private const float Speed = 25f, MinTime = 0.35f, MaxTime = 1.2f, Spin = 792f; // same tumble as the throw
             private Player player;
             private ItemDrop.ItemData item;
             private Thrown slot;

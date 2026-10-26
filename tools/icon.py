@@ -26,12 +26,18 @@ col = tex[np.clip((1 - T[:, 1] % 1) * th, 0, th - 1).astype(int), np.clip((T[:, 
 L = np.array([-0.45, 0.55, 0.7]); L /= np.linalg.norm(L)        # from the top left, in front
 shade = 0.45 + 0.75 * np.clip(Nn @ L, 0, 1)
 c = np.clip(col * LIFT * shade[:, None], 0, 255)
-lo, hi = Q[:, :2].min(0), Q[:, :2].max(0)
-pad = BIG * 0.06
+# Frame on the head and the top of the haft (weapon-frame z >= frame), like the game's icons: the rest of the haft
+# runs off the bottom-left corner.
+FRAME = float(opt.get("frame", -1e9))
+Zs = np.einsum("sk,fkd->fsd", bs, P[I]).reshape(-1, 3)[:, 2]
+keep = Zs >= FRAME
+lo, hi = Q[keep, :2].min(0), Q[keep, :2].max(0)
+pad = BIG * float(opt.get("pad", 0.06))
 sc = (BIG - 2 * pad) / max(hi - lo)
 off = (BIG - (hi - lo) * sc) / 2
 x = ((Q[:, 0] - lo[0]) * sc + off[0]).astype(int); y = (BIG - 1 - ((Q[:, 1] - lo[1]) * sc + off[1])).astype(int)
 order = np.argsort(Q[:, 2])
+ok = (x >= 0) & (x < BIG) & (y >= 0) & (y < BIG); order = order[ok[order]]
 img = np.zeros((BIG, BIG, 4)); img[y[order], x[order], :3] = c[order]; img[y[order], x[order], 3] = 255
 big = Image.fromarray(img.astype(np.uint8), "RGBA")
 small = big.resize((SIZE, SIZE), Image.LANCZOS)

@@ -51,6 +51,8 @@ namespace PotatoFighter
             }
             catch (Exception e) { sb.AppendLine("PROBE ERROR " + e); }
             File.WriteAllText(Path.Combine(Paths.BepInExRootPath, "PotatoFighter-probe.log"), sb.ToString());
+            try { File.WriteAllText(Path.Combine(Paths.BepInExRootPath, "PotatoFighter-probe-aoe.log"), AoeReport(__db)); }
+            catch (Exception e) { Plugin.Log.LogWarning("AoE probe: " + e); }
             Plugin.Log.LogInfo("Probe written to PotatoFighter-probe.log");
         }
 
@@ -66,6 +68,55 @@ namespace PotatoFighter
             DumpAttack(sb, "primary", s.m_attack);
             DumpAttack(sb, "secondary", s.m_secondaryAttack);
             DumpTree(sb, go.transform, "   ");
+        }
+
+        // Area effects: which attacks spawn one (and how), every Aoe with frost or an icy name, and frost status effects.
+        private static string AoeReport(ObjectDB db)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine("## Attacks that spawn something on trigger or on hit");
+            foreach (var go in db.m_items)
+            {
+                var shared = go ? go.GetComponent<ItemDrop>()?.m_itemData?.m_shared : null;
+                if (shared == null) continue;
+                foreach (var pair in new[] { ("primary", shared.m_attack), ("secondary", shared.m_secondaryAttack) })
+                {
+                    var a = pair.Item2;
+                    if (a == null || (!a.m_spawnOnTrigger && !a.m_spawnOnHit)) continue;
+                    sb.AppendLine($"{go.name} {pair.Item1} '{a.m_attackAnimation}' type {a.m_attackType}: onTrigger {(a.m_spawnOnTrigger ? a.m_spawnOnTrigger.name : "-")} onHit {(a.m_spawnOnHit ? a.m_spawnOnHit.name : "-")} chance {F(a.m_spawnOnHitChance)} range {F(a.m_attackRange)} height {F(a.m_attackHeight)} offset {F(a.m_attackOffset)}");
+                    if (a.m_spawnOnTrigger) DumpAoe(sb, a.m_spawnOnTrigger, "   ");
+                    if (a.m_spawnOnHit) DumpAoe(sb, a.m_spawnOnHit, "   ");
+                }
+            }
+            sb.AppendLine("## Aoe prefabs with frost damage, a frost status, or an icy name");
+            foreach (var go in ZNetScene.instance.m_prefabs)
+            {
+                if (!go) continue;
+                var aoe = go.GetComponentInChildren<Aoe>(true);
+                string n = go.name.ToLowerInvariant();
+                bool icy = n.Contains("ice") || n.Contains("frost") || n.Contains("freez") || n.Contains("snow") || n.Contains("cold");
+                if (aoe && (aoe.m_damage.m_frost > 0f || (aoe.m_statusEffect ?? "").ToLowerInvariant().Contains("frost") || icy)) DumpAoe(sb, go, "");
+                else if (icy && (n.StartsWith("fx_") || n.StartsWith("vfx_"))) sb.AppendLine($"effect {go.name}: {string.Join(", ", go.GetComponentsInChildren<Component>(true).Select(c => c.GetType().Name).Distinct())}");
+            }
+            sb.AppendLine("## Frost-like status effects");
+            foreach (var se in db.m_StatusEffects)
+                if (se && (se.name.ToLowerInvariant().Contains("frost") || se.name.ToLowerInvariant().Contains("freez") || se.name.ToLowerInvariant().Contains("cold")))
+                    sb.AppendLine($"{se.name} ({se.GetType().Name}) ttl {F(se.m_ttl)} '{Localization.instance.Localize(se.m_name)}'");
+            return sb.ToString();
+        }
+
+        private static void DumpAoe(StringBuilder sb, GameObject go, string pad)
+        {
+            var aoe = go.GetComponentInChildren<Aoe>(true);
+            sb.Append($"{pad}{go.name}");
+            if (aoe) sb.Append($": Aoe radius {F(aoe.m_radius)} useAttack {aoe.m_useAttackSettings} dmg {Dmg(aoe.m_damage)} status '{aoe.m_statusEffect}' enemy {aoe.m_hitEnemy} friendly {aoe.m_hitFriendly} owner {aoe.m_hitOwner} props {aoe.m_hitProps} terrain {aoe.m_hitTerrain} ttl {F(aoe.m_ttl)} delay {F(aoe.m_activationDelay)} interval {F(aoe.m_hitInterval)} onGround {aoe.m_placeOnGround} attach {aoe.m_attachToCaster} hitFx {Effects(aoe.m_hitEffects)} initFx {Effects(aoe.m_initiateEffect)}");
+            sb.AppendLine();
+            foreach (var ps in go.GetComponentsInChildren<ParticleSystem>(true))
+            {
+                var r = ps.GetComponent<ParticleSystemRenderer>();
+                sb.AppendLine($"{pad}   particles {ps.name}: max {ps.main.maxParticles} life {F(ps.main.startLifetime.constantMax)} size {F(ps.main.startSize.constantMax)} color {C(ps.main.startColor.color)} material {(r && r.sharedMaterial ? r.sharedMaterial.name + "/" + r.sharedMaterial.shader.name : "-")}");
+            }
+            foreach (var l in go.GetComponentsInChildren<Light>(true)) sb.AppendLine($"{pad}   light {l.name} {C(l.color)} {F(l.intensity)} range {F(l.range)}");
         }
 
         private static string Effects(EffectList list) =>

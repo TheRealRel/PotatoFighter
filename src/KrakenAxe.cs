@@ -20,13 +20,14 @@ namespace PotatoFighter
         internal const string ProjectileName = "potato_kraken_axe_projectile";
         private const string Model = "kraken_axe";
         private const float BalanceZ = 0.45f;     // the balance point along the haft (heavy head), metres from the hand
-        private const float SpinPerSecond = 720f;  // degrees a second, end over end: 2 turns, 12 deg a frame at 60 fps (no strobing at 30)
+        private const float SpinPerSecond = 792f;  // degrees a second, end over end: 2 turns, 12 deg a frame at 60 fps (no strobing at 30)
         private static readonly Color FrostColor = new Color(0.35f, 0.75f, 1f);
         private const float GlowStrength = 1.4f;
         private const float LightIntensity = 0.6f, LightRange = 3f;
         internal const float MaxFlightSeconds = 1.7f; // about 55 m: past that without a hit, it turns round by itself
         internal const float ThrowSpeed = 32f;      // m/s leaving the hand (the spear: 20)
         private const float ThrowAnimSpeed = 1.35f; // the spear's throw animation played faster: a snappier arm, earlier release
+        private const float ChopAnimSpeed = 1.3f;   // the axe's overhead chop (Shift + middle mouse), quicker
 
         private static Mesh mesh;
         private static Material material;
@@ -217,16 +218,21 @@ namespace PotatoFighter
         {
             private static readonly AccessTools.FieldRef<Character, ZSyncAnimation> Anim = AccessTools.FieldRefAccess<Character, ZSyncAnimation>("m_zanim");
             private static readonly AccessTools.FieldRef<Humanoid, Attack> Current = AccessTools.FieldRefAccess<Humanoid, Attack>("m_currentAttack");
-            private static bool sped;
+            private static float current = 1f;
 
             private static void Postfix(Player __instance)
             {
                 if (__instance != Player.m_localPlayer || throwAttack == null) return;
                 var attack = Current(__instance);
-                bool throwing = attack != null && __instance.InAttack() && attack.m_attackAnimation == throwAttack.m_attackAnimation && Is(attack.GetWeapon());
-                if (throwing == sped) return;
-                sped = throwing;
-                Anim(__instance)?.SetSpeed(throwing ? ThrowAnimSpeed : 1f);
+                float speed = 1f;
+                if (attack != null && __instance.InAttack() && Is(attack.GetWeapon()))
+                {
+                    if (attack.m_attackAnimation == throwAttack.m_attackAnimation) speed = ThrowAnimSpeed;
+                    else if (axeSpecial != null && attack.m_attackAnimation == axeSpecial.m_attackAnimation) speed = ChopAnimSpeed;
+                }
+                if (Mathf.Approximately(speed, current)) return;
+                current = speed;
+                Anim(__instance)?.SetSpeed(speed);
             }
         }
 
