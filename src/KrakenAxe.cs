@@ -200,6 +200,8 @@ namespace PotatoFighter
             aoe.m_hitEnemy = true; aoe.m_hitFriendly = false; aoe.m_hitOwner = false; aoe.m_hitSame = false;
             aoe.m_hitProps = false; aoe.m_hitTerrain = false;
             aoe.m_hitInterval = 0f; aoe.m_placeOnGround = true;
+            // The frost nova spawns extra copies of itself around the first (multi-spawn) and can chain: one burst only.
+            aoe.m_multiSpawnMin = 0; aoe.m_multiSpawnMax = 0; aoe.m_chainStartChance = 0f;
             aoe.m_skill = Skills.SkillType.Axes;
             var burst = PrefabManager.Cache.GetPrefab<GameObject>("fx_fenring_icenova");
             if (burst) aoe.m_initiateEffect = new EffectList { m_effectPrefabs = new[] { new EffectList.EffectData { m_prefab = burst, m_enabled = true, m_variant = -1 } } };

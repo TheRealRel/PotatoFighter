@@ -39,6 +39,8 @@ namespace PotatoFighter
         }
 
         private static readonly List<Thrown> thrown = new List<Thrown>();
+        // Test builds: one log line per recall decision ([Recall] ...), to see which path a weapon took.
+        private static void Trace(string text) { if (Plugin.TestBuild) Plugin.Log.LogInfo("[Recall] " + text); }
         // After a weapon comes back, the throw button does nothing until it's let go and a moment has passed, so the
         // press (or hold) that called it back doesn't throw it again straight away.
         private const float ThrowPause = 0.4f;
@@ -144,8 +146,10 @@ namespace PotatoFighter
                 // when called, and on its own once it has flown its range without hitting anything.
                 if (t.FlyingItem != null && t.Drop.IsNone())
                 {
+                    if (t.Flying) t.Where = t.Flying.transform.position;
                     if (t.Flying && t.Prefab == KrakenAxe.PrefabName && (t.Called || Time.time - t.ThrownAt > KrakenAxe.MaxFlightSeconds))
                     {
+                        Trace($"{t.Name}: turns round in the air ({(t.Called ? "called" : "out of range")}) at {Vector3.Distance(player.transform.position, t.Flying.transform.position):0.#} m");
                         var from = t.Flying.transform.position;
                         var item = t.FlyingItem;
                         var slot = new Thrown { Name = t.Name, Prefab = t.Prefab, Slot = t.Slot, Hand = t.Hand };
@@ -159,8 +163,24 @@ namespace PotatoFighter
                     }
                     if (t.Flying) continue;
                     // The projectile is gone without dropping anything (lost in lava, or it timed out). The weapon no
-                    // longer exists anywhere, so a recall this session can still bring it back.
-                    if (t.Called && GiveBack(player, t.FlyingItem.Clone(), t)) Forget(i);
+                    // longer exists anywhere, so a recall this session can still bring it back; a magical axe flies back
+                    // from where it was last seen.
+                    if (t.Called && t.Prefab == KrakenAxe.PrefabName)
+                    {
+                        Trace($"{t.Name}: vanished in flight, flies back from where it was last seen");
+                        var slot = new Thrown { Name = t.Name, Prefab = t.Prefab, Slot = t.Slot, Hand = t.Hand };
+                        var item = t.FlyingItem;
+                        var from = t.Where;
+                        Forget(i);
+                        changed = true;
+                        ReturnFlight.Begin(player, item, slot, from);
+                        continue;
+                    }
+                    if (t.Called)
+                    {
+                        Trace($"{t.Name}: vanished in flight, handed back");
+                        if (GiveBack(player, t.FlyingItem.Clone(), t)) Forget(i);
+                    }
                     continue;
                 }
 
@@ -192,6 +212,7 @@ namespace PotatoFighter
                 drop.Load();
                 if (t.Prefab == KrakenAxe.PrefabName)
                 {
+                    Trace($"{t.Name}: flies back from the ground, {Vector3.Distance(player.transform.position, go.transform.position):0.#} m away");
                     // A magical axe flies back to the hand: take the item now (nobody else can pick it up on the way)
                     // and hand it over when the flight arrives.
                     var item = drop.m_itemData;
@@ -227,8 +248,9 @@ namespace PotatoFighter
                 return false;
             }
             var held = inventory.GetAllItems().FirstOrDefault(x => x == item) ?? inventory.GetItemAt(t.Slot.x, t.Slot.y);
-            if (held != null && held.IsWeapon() && HandEmpty(player, t.Hand))
-                player.EquipItem(held);
+            bool equip = held != null && held.IsWeapon() && HandEmpty(player, t.Hand);
+            if (equip) player.EquipItem(held);
+            Trace($"{t.Name}: back {(equip ? "in hand" : "in the inventory (hand not empty)")}, slot {(slotFree ? "its own" : "another")}");
             player.m_pickupEffects.Create(player.transform.position, Quaternion.identity);
             waitForRelease = true;
             pauseUntil = Time.time + ThrowPause;
@@ -247,12 +269,6 @@ namespace PotatoFighter
             private float time, duration;
             private Transform pivot;
             private bool delivered;
-            // The catching arm: only the right arm reaches out toward the incoming axe, laid over whatever the body is
-            // doing (shoulder and elbow aimed at it after the animator has posed the character). Eases in, holds, eases out.
-            private Transform upperArm, foreArm, hand;
-            private float reach;
-            private Vector3 aim = Vector3.forward;
-            private const float ReachIn = 0.15f, ReachOut = 0.25f;
             private Vector3 last;
             private readonly HashSet<Character> struck = new HashSet<Character>();
             private const float ReturnDamage = 0.75f, HitRadius = 0.45f;
@@ -266,7 +282,6 @@ namespace PotatoFighter
                 flight.player = player; flight.item = item; flight.slot = slot; flight.from = from;
                 flight.duration = Mathf.Clamp(Vector3.Distance(from, Hand(player)) / Speed, MinTime, MaxTime);
                 flight.pivot = KrakenAxe.SpinningModel(go.transform, "spin").transform;
-                flight.FindArm();
                 flight.last = from;
                 if (characterMask == 0) characterMask = LayerMask.GetMask("character", "character_net", "character_ghost", "hitbox", "character_noenv");
             }
@@ -295,50 +310,12 @@ namespace PotatoFighter
                 {
                     Deliver();
                     if (pivot) pivot.gameObject.SetActive(false);
-                    Destroy(gameObject, ReachOut);
+                    Destroy(gameObject);
                 }
             }
 
             private void OnDestroy() => Deliver();
 
-            internal void FindArm()
-            {
-                var vis = player ? player.GetComponent<VisEquipment>() : null;
-                hand = vis ? vis.m_rightHand : null;
-                // m_rightHand is the attach point inside the hand; walk up to the hand, forearm and upper arm bones.
-                var h = hand;
-                while (h && !h.name.ToLowerInvariant().Contains("hand")) h = h.parent;
-                if (h && h.name.ToLowerInvariant().EndsWith("_attach")) h = h.parent;
-                hand = h;
-                foreArm = hand ? hand.parent : null;
-                upperArm = foreArm ? foreArm.parent : null;
-            }
-
-            private void LateUpdate()
-            {
-                if (!player || !upperArm || !foreArm || !hand) return;
-                reach = Mathf.MoveTowards(reach, delivered ? 0f : 1f, Time.deltaTime / (delivered ? ReachOut : ReachIn));
-                if (reach <= 0f) return;
-                // Toward the axe, but never more than 70 degrees off where the player faces (no arm twisted behind the back);
-                // after the catch, ease down from the last direction.
-                if (!delivered)
-                {
-                    var toAxe = transform.position - upperArm.position;
-                    var facing = player.transform.forward;
-                    aim = Vector3.RotateTowards(facing, toAxe.sqrMagnitude > 1e-6f ? toAxe.normalized : facing, 70f * Mathf.Deg2Rad, 0f);
-                }
-                var target = upperArm.position + aim * 2f;
-                Aim(upperArm, foreArm.position, target);
-                Aim(foreArm, hand.position, target);
-            }
-
-            private void Aim(Transform bone, Vector3 child, Vector3 target)
-            {
-                var now = child - bone.position;
-                var want = target - bone.position;
-                if (now.sqrMagnitude < 1e-6f || want.sqrMagnitude < 1e-6f) return;
-                bone.rotation = Quaternion.Slerp(Quaternion.identity, Quaternion.FromToRotation(now, want), reach) * bone.rotation;
-            }
 
 
             // Enemies the axe passes through on its way back take a hit (once each, 75% of a swing's damage), like the
@@ -563,8 +540,16 @@ namespace PotatoFighter
                 if (!__result || __state.IsNone()) return;
                 int i = thrown.FindIndex(x => x.Drop == __state);
                 if (i < 0) return;
+                var t = thrown[i];
                 Forget(i);
-                if (Player.m_localPlayer) Save(Player.m_localPlayer);
+                Trace($"{t.Name}: picked up by walking over it or E");
+                var player = Player.m_localPlayer;
+                if (!player) return;
+                Save(player);
+                // A thrown Kraken Axe picked up by hand goes back into the empty hand, as a recall would put it.
+                if (t.Prefab != KrakenAxe.PrefabName || !HandEmpty(player, t.Hand)) return;
+                var item = player.GetInventory().GetAllItems().FirstOrDefault(x => KrakenAxe.Is(x) && !player.IsItemEquiped(x));
+                if (item != null) player.EquipItem(item);
             }
         }
     }
