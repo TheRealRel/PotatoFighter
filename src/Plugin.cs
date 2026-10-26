@@ -23,8 +23,8 @@ namespace PotatoFighter
         public const string Id = "potato.fighter", Version = "1.0.0";
         // Test builds let every thrown weapon be recalled (the game's spears, modded javelins and throwing axes) so the
         // recall can be tried before PotatoFighter has weapons of its own. Release builds recall only OwnWeapons.
-        internal const bool TestBuild = true;
-        // Prefab names of PotatoFighter's own returning weapons (the chained weapon, the Kraken Axe). None yet.
+        internal const bool TestBuild = false;
+        // Prefab names of PotatoFighter's own returning weapons; each weapon adds itself when it's made (KrakenAxe.Create).
         internal static readonly System.Collections.Generic.HashSet<string> OwnWeapons = new System.Collections.Generic.HashSet<string>();
         private const string RecallSection = "1 - Weapon recall"; // No apostrophes: BepInEx rejects them in names.
         private const string BeamSection = "2 - Light beam";

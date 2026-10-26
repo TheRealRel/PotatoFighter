@@ -79,6 +79,7 @@ namespace PotatoFighter
                 ItemManager.Instance.AddItem(item);
                 Plugin.OwnWeapons.Add(PrefabName);
                 Glow.Watch();
+                ItemManager.OnItemsRegistered += AddUpgradeIdol;
             }
             catch (System.Exception e) { Plugin.Log.LogError($"The Kraken Axe couldn't be made: {e}"); }
         }
@@ -190,6 +191,35 @@ namespace PotatoFighter
             AddFrostLight(projectile.m_visual.transform);
             PrefabManager.Instance.AddPrefab(go);
             return go;
+        }
+
+        // The game's own recipes list an upgrade idol that only its upgrade station asks for (forges and workbenches skip it),
+        // and Reforged Potential reads the same idol for the item's tier. A Mistlands weapon takes the tier 5 weapon idol,
+        // Upgrader5Weapon; the amounts and the upgrade cap come from the Jotun Bane (the Mistlands axe). Runs each time
+        // the item database is built, after every mod's items are in.
+        private static void AddUpgradeIdol()
+        {
+            try
+            {
+                var db = ObjectDB.instance;
+                if (!db) return;
+                var ours = db.m_recipes.Find(r => r && r.m_item && r.m_item.name == PrefabName);
+                if (!ours || System.Array.Exists(ours.m_resources, r => r.m_upgraderResource)) return;
+                var idol = db.GetItemPrefab("Upgrader5Weapon")?.GetComponent<ItemDrop>();
+                if (!idol) { Plugin.Log.LogInfo("No upgrade idols in this game: the Kraken Axe upgrades at the forge only."); return; }
+                var reference = db.m_recipes.Find(r => r && r.m_item && r.m_item.name == "AxeJotunBane");
+                var like = reference ? System.Array.Find(reference.m_resources, r => r.m_upgraderResource) : null;
+                var list = new List<Piece.Requirement>(ours.m_resources)
+                {
+                    new Piece.Requirement { m_resItem = idol, m_amount = like?.m_amount ?? 1, m_amountPerLevel = like?.m_amountPerLevel ?? 0, m_recover = like?.m_recover ?? false, m_upgraderResource = true }
+                };
+                ours.m_resources = list.ToArray();
+                var item = db.GetItemPrefab(PrefabName)?.GetComponent<ItemDrop>();
+                int cap = reference ? reference.m_item.m_itemData.m_shared.m_maxQuality : 0;
+                if (item && cap > item.m_itemData.m_shared.m_maxQuality) item.m_itemData.m_shared.m_maxQuality = cap;
+                Plugin.Log.LogInfo($"Kraken Axe: upgrade idol Upgrader5Weapon x{like?.m_amount ?? 1} (+{like?.m_amountPerLevel ?? 0} a level, {(like != null ? "as the Jotun Bane" : "no Jotun Bane recipe to copy")}), upgrade cap {item?.m_itemData.m_shared.m_maxQuality}.");
+            }
+            catch (System.Exception e) { Plugin.Log.LogWarning($"The Kraken Axe's upgrade idol couldn't be added: {e.Message}"); }
         }
 
         // The chop's ice explosion: one hit of frost damage (its slow comes with the frost) to enemies within reach, and one
