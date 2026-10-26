@@ -20,7 +20,7 @@ namespace PotatoFighter
         private static readonly string[] Items =
         {
             "AxeStone", "AxeFlint", "AxeBronze", "AxeIron", "Battleaxe", "SpearFlint", "SpearBronze", "SpearElderbark",
-            "SpearWolfFang", "MaceSilver", "KnifeSilver", "MaceIron",
+            "SpearWolfFang", "MaceSilver", "KnifeSilver", "MaceIron", "AxeBlackMetal", "AxeJotunBane", "SpearCarapace", "SwordMistwalker", "KnifeSkollAndHati",
         };
 
         private static bool Prepare() => Plugin.TestBuild;
