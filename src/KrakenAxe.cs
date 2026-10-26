@@ -268,13 +268,19 @@ namespace PotatoFighter
         {
             private static readonly AccessTools.FieldRef<Attack, Humanoid> Owner = AccessTools.FieldRefAccess<Attack, Humanoid>("m_character");
 
+            private static Attack lastBurst;   // the chop's hit can be signalled more than once: one burst per chop
+            private static float lastBurstTime;
+
             private static void Postfix(Attack __instance)
             {
                 if (!iceBurst || axeSpecial == null || __instance.m_attackAnimation != axeSpecial.m_attackAnimation || AttackCancel.IsCancelled(__instance)) return;
+                if (__instance == lastBurst || Time.time - lastBurstTime < 0.5f) return;
                 var owner = Owner(__instance);
                 if (!owner || owner != Player.m_localPlayer) return;
                 var weapon = __instance.GetWeapon();
                 if (!Is(weapon)) return;
+                lastBurst = __instance;
+                lastBurstTime = Time.time;
                 var t = owner.transform;
                 var go = Object.Instantiate(iceBurst, t.position + t.forward * IceBurstReach + Vector3.up * 0.2f, t.rotation);
                 go.GetComponent<IProjectile>()?.Setup(owner, Vector3.zero, -1f, null, weapon, null);

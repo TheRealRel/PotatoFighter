@@ -246,7 +246,13 @@ namespace PotatoFighter
             private Vector3 from;
             private float time, duration;
             private Transform pivot;
-            private bool delivered, posed;
+            private bool delivered;
+            // The catching arm: only the right arm reaches out toward the incoming axe, laid over whatever the body is
+            // doing (shoulder and elbow aimed at it after the animator has posed the character). Eases in, holds, eases out.
+            private Transform upperArm, foreArm, hand;
+            private float reach;
+            private Vector3 aim = Vector3.forward;
+            private const float ReachIn = 0.15f, ReachOut = 0.25f;
             private Vector3 last;
             private readonly HashSet<Character> struck = new HashSet<Character>();
             private const float ReturnDamage = 0.75f, HitRadius = 0.45f;
@@ -260,8 +266,7 @@ namespace PotatoFighter
                 flight.player = player; flight.item = item; flight.slot = slot; flight.from = from;
                 flight.duration = Mathf.Clamp(Vector3.Distance(from, Hand(player)) / Speed, MinTime, MaxTime);
                 flight.pivot = KrakenAxe.SpinningModel(go.transform, "spin").transform;
-                // Hand out to catch it: the game's point emote (synced; it won't start mid-attack and stops if you move).
-                if (!player.InEmote()) { player.StartEmote("point", true); flight.posed = player.InEmote(); }
+                flight.FindArm();
                 flight.last = from;
                 if (characterMask == 0) characterMask = LayerMask.GetMask("character", "character_net", "character_ghost", "hitbox", "character_noenv");
             }
@@ -286,13 +291,55 @@ namespace PotatoFighter
                 Strike(last, pos);
                 last = pos;
                 if (pivot) pivot.Rotate(Spin * Time.deltaTime, 0f, 0f, Space.Self);
-                if (k >= 1f) { Deliver(); Destroy(gameObject); }
+                if (k >= 1f && !delivered)
+                {
+                    Deliver();
+                    if (pivot) pivot.gameObject.SetActive(false);
+                    Destroy(gameObject, ReachOut);
+                }
             }
 
             private void OnDestroy() => Deliver();
 
-            private static readonly System.Reflection.MethodInfo stopEmote = AccessTools.Method(typeof(Player), "StopEmote");
-            private static void StopEmote(Player p) => stopEmote?.Invoke(p, null);
+            internal void FindArm()
+            {
+                var vis = player ? player.GetComponent<VisEquipment>() : null;
+                hand = vis ? vis.m_rightHand : null;
+                // m_rightHand is the attach point inside the hand; walk up to the hand, forearm and upper arm bones.
+                var h = hand;
+                while (h && !h.name.ToLowerInvariant().Contains("hand")) h = h.parent;
+                if (h && h.name.ToLowerInvariant().EndsWith("_attach")) h = h.parent;
+                hand = h;
+                foreArm = hand ? hand.parent : null;
+                upperArm = foreArm ? foreArm.parent : null;
+            }
+
+            private void LateUpdate()
+            {
+                if (!player || !upperArm || !foreArm || !hand) return;
+                reach = Mathf.MoveTowards(reach, delivered ? 0f : 1f, Time.deltaTime / (delivered ? ReachOut : ReachIn));
+                if (reach <= 0f) return;
+                // Toward the axe, but never more than 70 degrees off where the player faces (no arm twisted behind the back);
+                // after the catch, ease down from the last direction.
+                if (!delivered)
+                {
+                    var toAxe = transform.position - upperArm.position;
+                    var facing = player.transform.forward;
+                    aim = Vector3.RotateTowards(facing, toAxe.sqrMagnitude > 1e-6f ? toAxe.normalized : facing, 70f * Mathf.Deg2Rad, 0f);
+                }
+                var target = upperArm.position + aim * 2f;
+                Aim(upperArm, foreArm.position, target);
+                Aim(foreArm, hand.position, target);
+            }
+
+            private void Aim(Transform bone, Vector3 child, Vector3 target)
+            {
+                var now = child - bone.position;
+                var want = target - bone.position;
+                if (now.sqrMagnitude < 1e-6f || want.sqrMagnitude < 1e-6f) return;
+                bone.rotation = Quaternion.Slerp(Quaternion.identity, Quaternion.FromToRotation(now, want), reach) * bone.rotation;
+            }
+
 
             // Enemies the axe passes through on its way back take a hit (once each, 75% of a swing's damage), like the
             // throw; tamed animals, other players and anything the game doesn't count as an enemy are left alone.
@@ -328,7 +375,6 @@ namespace PotatoFighter
                 if (delivered) return;
                 delivered = true;
                 var p = player ? player : Player.m_localPlayer;
-                if (posed && p && p.InEmote()) StopEmote(p);
                 if (p && !GiveBack(p, item, slot))
                     ItemDrop.DropItem(item, item.m_stack, p.transform.position + p.transform.forward + Vector3.up, Quaternion.identity);
             }
