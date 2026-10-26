@@ -1,4 +1,5 @@
-// PotatoFighter - the Kraken Axe and Epic Loot's Throwable enchantment.
+// PotatoFighter - our throwing weapons and Epic Loot's Throwable enchantment (the user's rule, 2026-10-26: every throwing
+// weapon PotatoFighter makes is kept out of Throwable). Each weapon adds its item name to ThrowingWeapons when it's made.
 // Throwable takes over a weapon's middle mouse attack: Epic Loot's own StartAttack prefix throws the weapon with a flint
 // spear's throw and skips the weapon's own attack. The Kraken Axe already throws (and comes back), so on it Throwable only
 // replaced our throw and the Shift + middle mouse chop with a plain spear throw. Two fixes, both found by name, so
@@ -14,7 +15,8 @@ namespace PotatoFighter
 {
     internal static class EpicLootThrowable
     {
-        private const string KrakenName = "$item_potato_kraken_axe";
+        // Item names ($item_...) of PotatoFighter's throwing weapons.
+        internal static readonly System.Collections.Generic.HashSet<string> ThrowingWeapons = new System.Collections.Generic.HashSet<string>();
         // Looking a missing type up by name logs a warning, so only when Epic Loot is installed.
         private static bool EpicLoot => BepInEx.Bootstrap.Chainloader.PluginInfos.ContainsKey("randyknapp.mods.epicloot");
 
@@ -40,9 +42,10 @@ namespace PotatoFighter
                     names = (IList)System.Activator.CreateInstance(field?.FieldType ?? typeof(System.Collections.Generic.List<string>));
                     field?.SetValue(requirements, names);
                 }
-                if (names.Contains(KrakenName)) return;
-                names.Add(KrakenName);
-                Plugin.Log.LogInfo("The Kraken Axe is kept out of Epic Loot's Throwable enchantment.");
+                int added = 0;
+                foreach (var name in ThrowingWeapons)
+                    if (!names.Contains(name)) { names.Add(name); added++; }
+                if (added > 0) Plugin.Log.LogInfo($"{added} PotatoFighter throwing weapon(s) kept out of Epic Loot's Throwable enchantment.");
             }
         }
 
@@ -56,7 +59,9 @@ namespace PotatoFighter
             // (true lets the game's StartAttack run).
             private static bool Prefix(object[] __args, ref bool __result)
             {
-                if (__args == null || __args.Length == 0 || !(__args[0] is Humanoid humanoid) || !KrakenAxe.Is(humanoid.GetCurrentWeapon())) return true;
+                if (__args == null || __args.Length == 0 || !(__args[0] is Humanoid humanoid)) return true;
+                var weapon = humanoid.GetCurrentWeapon();
+                if (weapon?.m_shared == null || !ThrowingWeapons.Contains(weapon.m_shared.m_name)) return true;
                 __result = true;
                 return false;
             }

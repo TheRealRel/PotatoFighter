@@ -77,6 +77,8 @@ namespace PotatoFighter
                 Setup(item.ItemPrefab, projectile);
                 ItemManager.Instance.AddItem(item);
                 Plugin.OwnWeapons.Add(PrefabName);
+                EpicLootThrowable.ThrowingWeapons.Add("$item_potato_kraken_axe");
+                EpicLootThrowable.NoThrowableRoll.Exclude();
                 Glow.Watch();
                 ItemManager.OnItemsRegistered += AddUpgradeIdol;
             }
