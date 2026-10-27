@@ -145,10 +145,11 @@ namespace PotatoFighter
         private static bool CanHaveStars(Character c) => !NoStarsInVanilla.Contains(Utils.GetPrefabName(c.gameObject));
 
         // ------------------------------------------------------------------ modifiers
-        // 10% + 5% a star (15% at 1 star, 35% at 5), scaled by Modifier chance; one at most.
+        // The user's choice (2026-10-26): 35% at 1 star and 10% more each star (45% at 2, 75% at 5), scaled by Modifier
+        // chance; one at most.
         private static Modifier RollModifier(Character c, int stars)
         {
-            if (UnityEngine.Random.value >= (0.10f + 0.05f * stars) * Plugin.CreatureModifierChance.Value / 100f) return Modifier.None;
+            if (UnityEngine.Random.value >= Mathf.Min(0.95f, (0.35f + 0.10f * (stars - 1)) * Plugin.CreatureModifierChance.Value / 100f)) return Modifier.None;
             var options = new List<Modifier> { Modifier.Quick, Modifier.Fierce, Modifier.Regenerating, Modifier.Splitting };
             if (c.m_health < ArmoredMaxBaseHealth) options.Add(Modifier.Armored);
             return options[UnityEngine.Random.Range(0, options.Count)];

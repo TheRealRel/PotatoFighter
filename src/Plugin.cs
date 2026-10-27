@@ -82,7 +82,7 @@ namespace PotatoFighter
             CreatureStarChance = Config.Bind(CreatureSection, "Creature star chance", 100,
                 new ConfigDescription("How likely a creature is to get its first extra star, in percent of the normal chance (0: only the game's own stars). Each further star keeps its biome's own chance. Set by the server.", new AcceptableValueRange<int>(0, 300), serverSet));
             CreatureModifierChance = Config.Bind(CreatureSection, "Creature modifier chance", 100,
-                new ConfigDescription("How likely a creature with stars spawns with a modifier, in percent of the normal chance (15% at 1 star to 35% at 5). 0: no modifiers. Set by the server.", new AcceptableValueRange<int>(0, 300), serverSet));
+                new ConfigDescription("How likely a creature with stars spawns with a modifier, in percent of the normal chance (35% at 1 star, 10% more each star, 75% at 5). 0: no modifiers. Set by the server.", new AcceptableValueRange<int>(0, 300), serverSet));
             OffspringModifierChance = Config.Bind(CreatureSection, "Offspring modifier chance", 50,
                 new ConfigDescription("Chance in percent that a newborn keeps its parent's modifier. A youngster always keeps its own when it grows up. Set by the server.", new AcceptableValueRange<int>(0, 100), serverSet));
             if (!hadCancel) CarryOverFromTweaks();

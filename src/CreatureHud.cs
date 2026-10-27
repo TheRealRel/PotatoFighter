@@ -1,5 +1,5 @@
 // PotatoFighter - showing creature levels above the game's two stars (Valheim): extra star icons on the health bar, the
-// modifier in front of the name and in the stars' colour, and the creature's look. The game has looks (size, colour,
+// modifier in front of the name with the whole name in the modifier's colour, and the creature's look. The game has looks (size, colour,
 // extra parts) for its own levels only; a creature above them keeps the highest one and grows 5% for each star past it
 // (not in dungeons, where a bigger creature could get stuck).
 using System.Collections.Generic;
@@ -18,7 +18,7 @@ namespace PotatoFighter
         private static readonly System.Type HudType = AccessTools.Inner(typeof(EnemyHud), "HudData");
         private static readonly FieldInfo Level2 = AccessTools.Field(HudType, "m_level2"), Level3 = AccessTools.Field(HudType, "m_level3"), Name = AccessTools.Field(HudType, "m_name");
         private static bool logged;
-        // What each health bar last showed (stars and modifier), so the stars are only rebuilt and recoloured on a change.
+        // How many stars each health bar last showed, so the extra stars are only rebuilt on a change.
         private static readonly Dictionary<object, int> shown = new Dictionary<object, int>();
 
         [HarmonyPatch(typeof(EnemyHud), "UpdateHuds")]
@@ -46,41 +46,23 @@ namespace PotatoFighter
                         (Level2.GetValue(hud) as RectTransform)?.gameObject.SetActive(false);
                         level3.gameObject.SetActive(true);
                     }
-                    int state = stars * 8 + (int)modifier;
-                    if (!shown.TryGetValue(hud, out int last) || last != state)
+                    if (!shown.TryGetValue(hud, out int last) || last != stars)
                     {
-                        shown[hud] = state;
+                        shown[hud] = stars;
                         ShowExtraStars(level3, Mathf.Max(stars, 2));
-                        Tint(Level2.GetValue(hud) as RectTransform, modifier);
-                        Tint(level3, modifier);
                     }
-                    if (modifier != Creatures.Modifier.None && Name.GetValue(hud) is TMP_Text name)
-                    {
-                        string prefix = Creatures.Names[(int)modifier] + " ";
-                        if (!name.text.StartsWith(prefix)) name.text = prefix + name.text;
-                    }
+                    if (modifier != Creatures.Modifier.None && Name.GetValue(hud) is TMP_Text name && !name.text.StartsWith("<color="))
+                        name.text = $"<color=#{ColorUtility.ToHtmlStringRGB(ModifierColors[(int)modifier])}>{Creatures.Names[(int)modifier]} {name.text}</color>";
                 }
             }
         }
 
-        // Stars take the modifier's colour, like CLLC's: Armored blue, Quick magenta, Fierce red, Regenerating green,
-        // Splitting white. Plain stars keep the game's own colour (read once from its star image before any tint).
+        // The name takes the modifier's colour (the stars stay the game's own): Armored blue, Quick magenta, Fierce red,
+        // Regenerating green, Splitting cyan.
         private static readonly Color[] ModifierColors =
         {
-            default, new Color(0.35f, 0.6f, 1f), new Color(1f, 0.35f, 1f), new Color(1f, 0.25f, 0.2f), new Color(0.35f, 1f, 0.35f), Color.white,
+            Color.white, new Color(0.35f, 0.6f, 1f), new Color(1f, 0.35f, 1f), new Color(1f, 0.3f, 0.25f), new Color(0.35f, 1f, 0.35f), new Color(0.4f, 0.95f, 1f),
         };
-        private static Color? starColor;
-
-        private static void Tint(RectTransform group, Creatures.Modifier modifier)
-        {
-            if (!group) return;
-            foreach (var image in group.GetComponentsInChildren<UnityEngine.UI.Image>(true))
-            {
-                if (starColor == null) starColor = image.color;
-                var color = modifier == Creatures.Modifier.None ? starColor.Value : ModifierColors[(int)modifier];
-                if (image.color != color) image.color = color;
-            }
-        }
 
         // The game's 2-star group holds two star images side by side; copies of the last one, one step further each, make
         // the rest. Copies beyond the creature's stars are hidden, so a hud reused for another creature shows the right count.
