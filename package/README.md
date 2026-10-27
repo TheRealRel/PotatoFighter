@@ -1,4 +1,4 @@
-Weapons and combat fixes for Valheim. The first weapon is the Kraken Axe, a frost axe you throw and call back to your hand. Attack cancel and the fast bow shot fix, formerly in Potato Tweaks, live here now.
+Combat changes for Valheim. Creatures spawn with more stars the further you travel, up to five, and some with a modifier you can read from their coloured name: Armored, Quick, Fierce, Regenerating or Splitting. Their young can inherit it. Weapon switches no longer slow you to a walk, a loaded crossbow stays loaded, and blocking cancels an attack mid-swing. Then there is the Kraken Axe, a frost axe you throw and call back to your hand, and a few fixes for bows.
 
 ![](https://raw.githubusercontent.com/TheRealRel/PotatoFighter/main/docs/images/icon-axe-front.png) ![](https://raw.githubusercontent.com/TheRealRel/PotatoFighter/main/docs/images/icon-axe-turned.png) ![](https://raw.githubusercontent.com/TheRealRel/PotatoFighter/main/docs/images/icon-axe-back.png)
 
