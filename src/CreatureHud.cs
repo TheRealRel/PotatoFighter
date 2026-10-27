@@ -1,5 +1,5 @@
 // PotatoFighter - showing creature levels above the game's two stars (Valheim): extra star icons on the health bar, the
-// modifier in front of the name, and the creature's look. The game has looks (size, colour, extra parts) for its own levels
+// modifier in front of the name and in the stars' colour, and the creature's look. The game has looks (size, colour, extra parts) for its own levels
 // only; a creature above them keeps the highest one and grows 5% for each star past it (not in dungeons, where a bigger
 // creature could get stuck).
 using System.Collections.Generic;
@@ -44,12 +44,33 @@ namespace PotatoFighter
                     }
                     else ShowExtraStars(level3, 2);
                     var modifier = Creatures.Get(c);
+                    Tint(Level2.GetValue(hud) as RectTransform, modifier);
+                    Tint(level3, modifier);
                     if (modifier != Creatures.Modifier.None && Name.GetValue(hud) is TMP_Text name)
                     {
                         string prefix = Creatures.Names[(int)modifier] + " ";
                         if (!name.text.StartsWith(prefix)) name.text = prefix + name.text;
                     }
                 }
+            }
+        }
+
+        // Stars take the modifier's colour, like CLLC's: Armored blue, Quick magenta, Fierce red, Regenerating green,
+        // Splitting white. Plain stars keep the game's own colour (read once from its star image before any tint).
+        private static readonly Color[] ModifierColors =
+        {
+            default, new Color(0.35f, 0.6f, 1f), new Color(1f, 0.35f, 1f), new Color(1f, 0.25f, 0.2f), new Color(0.35f, 1f, 0.35f), Color.white,
+        };
+        private static Color? starColor;
+
+        private static void Tint(RectTransform group, Creatures.Modifier modifier)
+        {
+            if (!group) return;
+            foreach (var image in group.GetComponentsInChildren<UnityEngine.UI.Image>(true))
+            {
+                if (starColor == null) starColor = image.color;
+                var color = modifier == Creatures.Modifier.None ? starColor.Value : ModifierColors[(int)modifier];
+                if (image.color != color) image.color = color;
             }
         }
 

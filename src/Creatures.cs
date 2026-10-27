@@ -28,7 +28,6 @@ namespace PotatoFighter
 
         private static readonly AccessTools.FieldRef<Character, ZNetView> View = AccessTools.FieldRefAccess<Character, ZNetView>("m_nview");
         private static readonly List<KeyValuePair<Character, float>> waiting = new List<KeyValuePair<Character, float>>();
-        private static Dictionary<string, bool> canHaveStars;
 
         internal static bool StandAside => Chainloader.PluginInfos.ContainsKey(SlsId) || Chainloader.PluginInfos.ContainsKey(CllcId);
         internal static bool On => Plugin.CreatureLevels.Value && !StandAside;
@@ -83,21 +82,23 @@ namespace PotatoFighter
             if (fresh && now > 1 && zdo.GetInt(ModKey) == 0) Assign(c, RollModifier(c, now - 1));
             if (Diagnostics)
             {
-                Chances(c, out float first, out int most);
-                Plugin.Log.LogInfo($"[Levels] {Utils.GetPrefabName(c.gameObject)} {(fresh ? "spawned" : "over the cap")} in {Heightmap.FindBiome(c.transform.position)}: {Stars(level)} -> {Stars(now)}{(Get(c) != Modifier.None ? ", " + Get(c) : "")} (first star {first:P0}, most {most}{(CanHaveStars(c) ? "" : ", no stars in vanilla")})");
+                Chances(c, out float first, out float next, out int most);
+                Plugin.Log.LogInfo($"[Levels] {Utils.GetPrefabName(c.gameObject)} {(fresh ? "spawned" : "over the cap")} in {Heightmap.FindBiome(c.transform.position)}: {Stars(level)} -> {Stars(now)}{(Get(c) != Modifier.None ? ", " + Get(c) : "")} (first star {first:P0}, next {next:P0}, most {most}{(CanHaveStars(c) ? "" : ", no stars in vanilla")})");
             }
         }
 
         private static string Stars(int level) => level - 1 == 1 ? "1 star" : $"{level - 1} stars";
 
         // Stars by biome (the user's choice, 2026-10-26): each biome has its own first-star chance and most stars, and a
-        // biome whose boss is beaten gets a little more. Each further star comes 30% of the time. Star chance scales only
-        // the first star. Creatures the game never gives stars roll as if two biomes earlier (none in the Meadows or
-        // Black Forest).
+        // biome whose boss is beaten gets a little more. Each further star has its own chance, higher in later biomes. Star
+        // chance scales only the first star. Creatures the game never gives stars roll as if two biomes earlier (none in
+        // the Meadows or Black Forest).
         private static readonly string[] BiomeBoss = { "defeated_eikthyr", "defeated_gdking", "defeated_bonemass", "defeated_dragon", "defeated_goblinking", "defeated_queen", "defeated_fader", "" };
-        private static readonly float[] FirstStar = { 0.06f, 0.10f, 0.14f, 0.18f, 0.22f, 0.26f, 0.26f, 0.26f };
+        // The user's table (2026-10-26, "stronger"): chance of a first star, chance of each further star, most stars.
+        private static readonly float[] FirstStar = { 0.15f, 0.27f, 0.38f, 0.48f, 0.60f, 0.68f, 0.68f, 0.68f };
+        private static readonly float[] NextStar = { 0.30f, 0.38f, 0.45f, 0.53f, 0.60f, 0.68f, 0.68f, 0.68f };
         private static readonly int[] BiomeMaxStars = { 2, 3, 4, 5, 5, 5, 5, 5 };
-        private const float BossBump = 0.04f, NextStar = 0.3f;
+        private const float BossBump = 0.06f;
 
         // Meadows 0, Black Forest 1, Swamp 2 (and the ocean), Mountain 3, Plains 4, Mistlands 5, Ashlands 6, Deep North 7.
         private static int Tier(Heightmap.Biome biome)
@@ -119,44 +120,30 @@ namespace PotatoFighter
             ((ZoneSystem.instance && ZoneSystem.instance.GetGlobalKey(key)) || (Player.m_localPlayer && Player.m_localPlayer.HaveUniqueKey(key)));
 
         // The first-star chance and most stars for a creature here; 0 chance when it gets none.
-        internal static void Chances(Character c, out float first, out int most)
+        internal static void Chances(Character c, out float first, out float next, out int most)
         {
             int tier = Tier(Heightmap.FindBiome(c.transform.position));
             bool beaten = Beaten(BiomeBoss[tier]);
             if (!CanHaveStars(c)) tier -= 2;
-            if (tier < 0) { first = 0f; most = 0; return; }
+            if (tier < 0) { first = next = 0f; most = 0; return; }
+            next = NextStar[tier];
             first = Mathf.Min(0.95f, (FirstStar[tier] + (beaten ? BossBump : 0f)) * Plugin.CreatureStarChance.Value / 100f);
             most = Mathf.Min(BiomeMaxStars[tier], Plugin.CreatureMaxStars.Value);
         }
 
         private static int RollStars(Character c)
         {
-            Chances(c, out float first, out int most);
+            Chances(c, out float first, out float next, out int most);
             int stars = 0;
-            while (stars < most && UnityEngine.Random.value < (stars == 0 ? first : NextStar)) stars++;
+            while (stars < most && UnityEngine.Random.value < (stars == 0 ? first : next)) stars++;
             return stars;
         }
 
-        // Like CLLC: a creature the game's spawn lists never give stars counts as one that can't have them. Creatures not in
-        // the lists at all (camps, dungeons) can.
-        private static bool CanHaveStars(Character c)
-        {
-            if (canHaveStars == null)
-            {
-                canHaveStars = new Dictionary<string, bool>();
-                var lists = ZoneSystem.instance && ZoneSystem.instance.m_zoneCtrlPrefab ? ZoneSystem.instance.m_zoneCtrlPrefab.GetComponent<SpawnSystem>()?.m_spawnLists : null;
-                if (lists != null)
-                    foreach (var list in lists)
-                        if (list != null)
-                            foreach (var data in list.m_spawners)
-                                if (data?.m_prefab != null)
-                                {
-                                    canHaveStars.TryGetValue(data.m_prefab.name, out bool any);
-                                    canHaveStars[data.m_prefab.name] = any || data.m_maxLevel > 1;
-                                }
-            }
-            return !canHaveStars.TryGetValue(Utils.GetPrefabName(c.gameObject), out bool stars) || stars;
-        }
+        // Creatures the game never gives stars (a fixed list: guessing from the spawn lists also caught dungeon skeletons,
+        // which do get stars). Prefab names.
+        private static readonly HashSet<string> NoStarsInVanilla = new HashSet<string> { "Lox", "Deathsquito", "Serpent", "Hatchling", "Wraith" };
+
+        private static bool CanHaveStars(Character c) => !NoStarsInVanilla.Contains(Utils.GetPrefabName(c.gameObject));
 
         // ------------------------------------------------------------------ modifiers
         // 10% + 5% a star (15% at 1 star, 35% at 5), scaled by Modifier chance; one at most.
