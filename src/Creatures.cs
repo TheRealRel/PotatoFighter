@@ -276,10 +276,12 @@ namespace PotatoFighter
                 carryFrom = null;   // one new creature per call
                 Zdo(__instance)?.Set(RolledKey, true);
                 var modifier = Get(from);
-                if (modifier == Modifier.None || modifier == Modifier.Armored && __instance.m_health >= ArmoredMaxBaseHealth) return;
-                if (!carryAlways && UnityEngine.Random.value * 100f >= Plugin.OffspringModifierChance.Value) return;
-                Assign(__instance, modifier);
-                if (Diagnostics) Plugin.Log.LogInfo($"[Levels] {Utils.GetPrefabName(__instance.gameObject)} {(carryAlways ? "grew up" : "was born")} {modifier}");
+                bool keeps = modifier != Modifier.None && !(modifier == Modifier.Armored && __instance.m_health >= ArmoredMaxBaseHealth) &&
+                    (carryAlways || UnityEngine.Random.value * 100f < Plugin.OffspringModifierChance.Value);
+                if (keeps) Assign(__instance, modifier);
+                if (Diagnostics)
+                    Plugin.Log.LogInfo($"[Levels] {Utils.GetPrefabName(__instance.gameObject)} {(carryAlways ? "grew up" : "was born")} with {Stars(__instance.GetLevel())}: " +
+                        (modifier == Modifier.None ? "no modifier to pass on" : keeps ? $"kept {modifier}" : $"didn't keep {modifier}"));
             }
         }
 
