@@ -38,7 +38,7 @@ namespace PotatoFighter
         private const string CreatureSection = "3 - Creatures";
 
         internal static ManualLogSource Log;
-        internal static ConfigEntry<bool> RecallEnabled, RecallPin, Beam, AttackCancelEnabled, KeepFastShots, FastSwapEnabled, FastSwapSprint, FastSwapAttack;
+        internal static ConfigEntry<bool> RecallEnabled, RecallPin, Beam, AttackCancelEnabled, KeepFastShots, FastSwapEnabled, FastSwapSprint, FastSwapAttack, CrossbowsStayLoaded;
         internal static ConfigEntry<int> FastSwapStamina;
         internal static ConfigEntry<Color> BeamColor;
         internal static ConfigEntry<int> ExplosionSize;
@@ -71,6 +71,8 @@ namespace PotatoFighter
                 new ConfigDescription("Stamina a weapon switch or sheathing costs while sprinting on the ground, with Fast swap while sprinting on. Without that much stamina, the switch doesn't happen. 0: free. Set by the server.", new AcceptableValueRange<int>(0, 50), serverSet));
             FastSwapAttack = Config.Bind(CombatSection, "Attack cuts a swap short", false,
                 new ConfigDescription("Attacking (or drawing a bow) during a weapon switch finishes the switch at once and goes ahead with the new weapon, instead of waiting for it. Needs Fast swap. Set by the server.", null, serverSet));
+            CrossbowsStayLoaded = Config.Bind(CombatSection, "Crossbows stay loaded", true,
+                new ConfigDescription("A loaded crossbow stays loaded when you switch to something else and back (each crossbow keeps its own load). The bolt is still used only when it fires. Set by the server.", null, serverSet));
             ExplosionSize = Config.Bind(WeaponSection, "Explosion size", 100,
                 new ConfigDescription("The size of every PotatoFighter weapon's explosions, in percent of its own size (the Kraken Axe's ice explosion: 2.9 m at 100). Both the reach of the damage and the effect grow and shrink with it. Set by the server.", new AcceptableValueRange<int>(50, 200), serverSet));
             CreatureLevels = Config.Bind(CreatureSection, "Creature levels", true,
@@ -87,7 +89,7 @@ namespace PotatoFighter
 
             harmony = new Harmony(Id);
             var nested = typeof(Recall).GetNestedTypes(AccessTools.all).Concat(typeof(Flight).GetNestedTypes(AccessTools.all))
-                .Concat(typeof(AttackCancel).GetNestedTypes(AccessTools.all)).Concat(typeof(FastSwap).GetNestedTypes(AccessTools.all)).Concat(typeof(EpicLootThrowable).GetNestedTypes(AccessTools.all)).Concat(typeof(KrakenAxe).GetNestedTypes(AccessTools.all));
+                .Concat(typeof(AttackCancel).GetNestedTypes(AccessTools.all)).Concat(typeof(FastSwap).GetNestedTypes(AccessTools.all)).Concat(typeof(EpicLootThrowable).GetNestedTypes(AccessTools.all)).Concat(typeof(KrakenAxe).GetNestedTypes(AccessTools.all)).Concat(typeof(CrossbowLoad).GetNestedTypes(AccessTools.all));
             if (Creatures.StandAside) Log.LogWarning("StarLevelSystem or Creature Level and Loot Control is installed, so PotatoFighter's creature levels stay off. Remove it to use them.");
             else nested = nested.Concat(typeof(Creatures).GetNestedTypes(AccessTools.all)).Concat(typeof(CreatureHud).GetNestedTypes(AccessTools.all));
             foreach (var type in nested) Patch(type);
