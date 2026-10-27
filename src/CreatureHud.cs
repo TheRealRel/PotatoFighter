@@ -1,7 +1,7 @@
 // PotatoFighter - showing creature levels above the game's two stars (Valheim): extra star icons on the health bar, the
-// modifier in front of the name and in the stars' colour, and the creature's look. The game has looks (size, colour, extra parts) for its own levels
-// only; a creature above them keeps the highest one and grows 5% for each star past it (not in dungeons, where a bigger
-// creature could get stuck).
+// modifier in front of the name and in the stars' colour, and the creature's look. The game has looks (size, colour,
+// extra parts) for its own levels only; a creature above them keeps the highest one and grows 5% for each star past it
+// (not in dungeons, where a bigger creature could get stuck).
 using System.Collections.Generic;
 using System.Reflection;
 using HarmonyLib;
@@ -18,6 +18,8 @@ namespace PotatoFighter
         private static readonly System.Type HudType = AccessTools.Inner(typeof(EnemyHud), "HudData");
         private static readonly FieldInfo Level2 = AccessTools.Field(HudType, "m_level2"), Level3 = AccessTools.Field(HudType, "m_level3"), Name = AccessTools.Field(HudType, "m_name");
         private static bool logged;
+        // What each health bar last showed (stars and modifier), so the stars are only rebuilt and recoloured on a change.
+        private static readonly Dictionary<object, int> shown = new Dictionary<object, int>();
 
         [HarmonyPatch(typeof(EnemyHud), "UpdateHuds")]
         internal static class Stars
@@ -29,6 +31,7 @@ namespace PotatoFighter
                 if (!Creatures.On) return;
                 var huds = Huds(__instance);
                 if (huds == null) return;
+                if (shown.Count > 4 * huds.Count + 64) shown.Clear();   // bars of creatures that have gone
                 foreach (System.Collections.DictionaryEntry pair in huds)
                 {
                     var c = pair.Key as Character;
@@ -36,16 +39,21 @@ namespace PotatoFighter
                     var level3 = hud == null ? null : Level3.GetValue(hud) as RectTransform;
                     if (!c || !level3) continue;
                     int stars = c.GetLevel() - 1;
+                    var modifier = Creatures.Get(c);
+                    // The game switches its star groups each frame (level 2 and 3 only), so the 3-and-up case does too.
                     if (stars >= 2)
                     {
                         (Level2.GetValue(hud) as RectTransform)?.gameObject.SetActive(false);
                         level3.gameObject.SetActive(true);
-                        ShowExtraStars(level3, stars);
                     }
-                    else ShowExtraStars(level3, 2);
-                    var modifier = Creatures.Get(c);
-                    Tint(Level2.GetValue(hud) as RectTransform, modifier);
-                    Tint(level3, modifier);
+                    int state = stars * 8 + (int)modifier;
+                    if (!shown.TryGetValue(hud, out int last) || last != state)
+                    {
+                        shown[hud] = state;
+                        ShowExtraStars(level3, Mathf.Max(stars, 2));
+                        Tint(Level2.GetValue(hud) as RectTransform, modifier);
+                        Tint(level3, modifier);
+                    }
                     if (modifier != Creatures.Modifier.None && Name.GetValue(hud) is TMP_Text name)
                     {
                         string prefix = Creatures.Names[(int)modifier] + " ";

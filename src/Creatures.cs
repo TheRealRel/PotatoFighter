@@ -1,8 +1,8 @@
 // PotatoFighter - creature levels (Valheim), written from scratch to replace StarLevelSystem and Creature Level & Loot
-// Control with something small. Fresh spawns roll stars from the creature's biome and the world's boss progress, up to
-// Max stars; a few get one modifier. The game itself already gives health (+100% a star) and damage (+50% a star) at any
-// level and passes a parent's level to its young, so none of that is redone here. Steps aside when StarLevelSystem or
-// CLLC is installed.
+// Control with something small. Fresh spawns roll stars by biome (a little more once its boss is beaten), up to Max
+// stars; a few get one modifier. The game itself already gives health (+100% a star) and damage (+50% a star) at any
+// level and passes a parent's level to its young, so none of that is redone here; loot per star is toned down. Steps
+// aside when StarLevelSystem or CLLC is installed.
 using System;
 using System.Collections.Generic;
 using BepInEx.Bootstrap;
@@ -14,7 +14,7 @@ namespace PotatoFighter
     internal static class Creatures
     {
         internal const string SlsId = "MidnightsFX.StarLevelSystem", CllcId = "org.bepinex.plugins.creaturelevelcontrol";
-        internal static bool Diagnostics = true;   // test builds: one log line per roll, re-roll and split
+        internal const bool Diagnostics = true;   // test builds: one log line per roll, re-roll and split
 
         // ZDO keys: the modifier (0 none), and "rolled" so a creature is never rolled twice.
         internal static readonly int ModKey = "PotatoFighter_Modifier".GetStableHashCode();
@@ -89,10 +89,9 @@ namespace PotatoFighter
 
         private static string Stars(int level) => level - 1 == 1 ? "1 star" : $"{level - 1} stars";
 
-        // Stars by biome (the user's choice, 2026-10-26): each biome has its own first-star chance and most stars, and a
-        // biome whose boss is beaten gets a little more. Each further star has its own chance, higher in later biomes. Star
-        // chance scales only the first star. Creatures the game never gives stars roll as if two biomes earlier (none in
-        // the Meadows or Black Forest).
+        // Stars by biome (the user's choice, 2026-10-26): each biome has its own chance of a first star, of each further
+        // star, and most stars; a biome whose boss is beaten gets a little more. Star chance scales only the first star.
+        // Creatures the game never gives stars roll as if two biomes earlier (none in the Meadows or Black Forest).
         private static readonly string[] BiomeBoss = { "defeated_eikthyr", "defeated_gdking", "defeated_bonemass", "defeated_dragon", "defeated_goblinking", "defeated_queen", "defeated_fader", "" };
         // The user's table (2026-10-26, "stronger"): chance of a first star, chance of each further star, most stars.
         private static readonly float[] FirstStar = { 0.15f, 0.27f, 0.38f, 0.48f, 0.60f, 0.68f, 0.68f, 0.68f };
@@ -119,7 +118,7 @@ namespace PotatoFighter
         private static bool Beaten(string key) => key.Length > 0 &&
             ((ZoneSystem.instance && ZoneSystem.instance.GetGlobalKey(key)) || (Player.m_localPlayer && Player.m_localPlayer.HaveUniqueKey(key)));
 
-        // The first-star chance and most stars for a creature here; 0 chance when it gets none.
+        // The chances and most stars for a creature where it stands; 0 when it gets none.
         internal static void Chances(Character c, out float first, out float next, out int most)
         {
             int tier = Tier(Heightmap.FindBiome(c.transform.position));
