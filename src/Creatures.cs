@@ -14,7 +14,7 @@ namespace PotatoFighter
     internal static class Creatures
     {
         internal const string SlsId = "MidnightsFX.StarLevelSystem", CllcId = "org.bepinex.plugins.creaturelevelcontrol";
-        internal const bool Diagnostics = true;   // test builds: one log line per roll, re-roll and split
+        internal const bool Diagnostics = false;   // test builds: one log line per roll, re-roll and split
 
         // ZDO keys: the modifier (0 none), and "rolled" so a creature is never rolled twice.
         internal static readonly int ModKey = "PotatoFighter_Modifier".GetStableHashCode();

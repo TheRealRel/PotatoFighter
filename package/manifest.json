@@ -1,6 +1,6 @@
 {
     "name": "PotatoFighter",
-    "version_number": "1.0.0",
+    "version_number": "1.1.0",
     "website_url": "https://github.com/TheRealRel/PotatoFighter",
     "description": "Combat changes: creatures with up to 5 stars and modifiers their young inherit, weapon switches that don't slow you, crossbows that stay loaded, attack cancel. Plus the Kraken Axe, a frost axe you throw and call back, and bow fixes.",
     "dependencies": [

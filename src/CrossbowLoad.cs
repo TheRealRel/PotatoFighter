@@ -13,7 +13,7 @@ namespace PotatoFighter
     internal static class CrossbowLoad
     {
         private const string Key = "PotatoFighter_Loaded";
-        internal const bool Diagnostics = true;   // test builds: one log line when a load is kept and when it's restored
+        internal const bool Diagnostics = false;   // test builds: one log line when a load is kept and when it's restored
         private static readonly AccessTools.FieldRef<Player, ItemDrop.ItemData> Loaded = AccessTools.FieldRefAccess<Player, ItemDrop.ItemData>("m_weaponLoaded");
         private static readonly MethodInfo SetLoaded = AccessTools.Method(typeof(Player), "SetWeaponLoaded");
 
